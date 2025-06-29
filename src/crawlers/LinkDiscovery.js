@@ -1,4 +1,4 @@
-const Logger = require("../utils/Logger");
+import Logger from "../utils/Logger.js";
 
 class LinkDiscovery {
   constructor(config = {}) {
@@ -10,7 +10,7 @@ class LinkDiscovery {
     this.logger.info("LinkDiscovery initialized");
   }
 
-  async extractLinks(page, currentUrl) {
+  async extractLinks(page) {
     return await page.evaluate(() => {
       const links = [];
       const anchors = document.querySelectorAll("a[href]");
@@ -35,4 +35,4 @@ class LinkDiscovery {
   }
 }
 
-module.exports = LinkDiscovery;
+export default LinkDiscovery;

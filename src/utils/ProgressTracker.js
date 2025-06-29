@@ -1,4 +1,4 @@
-const Logger = require("./Logger");
+import Logger from "./Logger.js";
 
 class ProgressTracker {
   constructor() {
@@ -50,7 +50,6 @@ class ProgressTracker {
 
   updateProgress(progress) {
     this.current = progress.current || this.current + 1;
-
     const percentage = Math.round((this.current / this.total) * 100);
     const elapsed = Date.now() - this.startTime;
     const rate = this.current / (elapsed / 1000);
@@ -83,4 +82,4 @@ class ProgressTracker {
   }
 }
 
-module.exports = ProgressTracker;
+export default ProgressTracker;

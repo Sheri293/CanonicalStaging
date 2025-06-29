@@ -1,4 +1,4 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class PerformanceAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -13,7 +13,7 @@ class PerformanceAuditor extends BaseAuditor {
     };
   }
 
-  async audit(page, url) {
+  async audit(page) {
     try {
       const performanceMetrics = await this.collectPerformanceMetrics(page);
       const resourceMetrics = await this.collectResourceMetrics(page);
@@ -192,7 +192,7 @@ class PerformanceAuditor extends BaseAuditor {
     });
   }
 
-  auditCoreWebVitals(metrics, issues, warnings, recommendations) {
+  auditCoreWebVitals(metrics, issues, warnings) {
     if (metrics.fcp && metrics.fcp > this.thresholds.fcp) {
       issues.push(
         this.createError(
@@ -200,7 +200,10 @@ class PerformanceAuditor extends BaseAuditor {
           `First Contentful Paint is too slow (${Math.round(
             metrics.fcp
           )}ms). Should be under ${this.thresholds.fcp}ms`,
-          { fcp: metrics.fcp, threshold: this.thresholds.fcp }
+          {
+            fcp: metrics.fcp,
+            threshold: this.thresholds.fcp,
+          }
         )
       );
     }
@@ -212,7 +215,10 @@ class PerformanceAuditor extends BaseAuditor {
           `Largest Contentful Paint is too slow (${Math.round(
             metrics.lcp
           )}ms). Should be under ${this.thresholds.lcp}ms`,
-          { lcp: metrics.lcp, threshold: this.thresholds.lcp }
+          {
+            lcp: metrics.lcp,
+            threshold: this.thresholds.lcp,
+          }
         )
       );
     }
@@ -224,7 +230,10 @@ class PerformanceAuditor extends BaseAuditor {
           `Cumulative Layout Shift is too high (${metrics.cls.toFixed(
             3
           )}). Should be under ${this.thresholds.cls}`,
-          { cls: metrics.cls, threshold: this.thresholds.cls }
+          {
+            cls: metrics.cls,
+            threshold: this.thresholds.cls,
+          }
         )
       );
     }
@@ -236,7 +245,10 @@ class PerformanceAuditor extends BaseAuditor {
           `First Input Delay is high (${Math.round(
             metrics.fid
           )}ms). Should be under ${this.thresholds.fid}ms`,
-          { fid: metrics.fid, threshold: this.thresholds.fid }
+          {
+            fid: metrics.fid,
+            threshold: this.thresholds.fid,
+          }
         )
       );
     }
@@ -248,13 +260,16 @@ class PerformanceAuditor extends BaseAuditor {
           `Time to First Byte is slow (${Math.round(
             metrics.ttfb
           )}ms). Should be under ${this.thresholds.ttfb}ms`,
-          { ttfb: metrics.ttfb, threshold: this.thresholds.ttfb }
+          {
+            ttfb: metrics.ttfb,
+            threshold: this.thresholds.ttfb,
+          }
         )
       );
     }
   }
 
-  auditLoadTimes(metrics, issues, warnings, recommendations) {
+  auditLoadTimes(metrics, warnings) {
     if (metrics.domContentLoaded > 3000) {
       warnings.push(
         this.createWarning(
@@ -262,7 +277,9 @@ class PerformanceAuditor extends BaseAuditor {
           `DOM Content Loaded is slow (${Math.round(
             metrics.domContentLoaded
           )}ms)`,
-          { domContentLoaded: metrics.domContentLoaded }
+          {
+            domContentLoaded: metrics.domContentLoaded,
+          }
         )
       );
     }
@@ -272,7 +289,9 @@ class PerformanceAuditor extends BaseAuditor {
         this.createWarning(
           "slow_load_complete",
           `Page load complete is slow (${Math.round(metrics.loadComplete)}ms)`,
-          { loadComplete: metrics.loadComplete }
+          {
+            loadComplete: metrics.loadComplete,
+          }
         )
       );
     }
@@ -282,19 +301,23 @@ class PerformanceAuditor extends BaseAuditor {
         this.createWarning(
           "slow_dom_interactive",
           `DOM Interactive is slow (${Math.round(metrics.domInteractive)}ms)`,
-          { domInteractive: metrics.domInteractive }
+          {
+            domInteractive: metrics.domInteractive,
+          }
         )
       );
     }
   }
 
-  auditResourceUsage(resourceMetrics, issues, warnings, recommendations) {
+  auditResourceUsage(resourceMetrics, warnings, recommendations) {
     if (resourceMetrics.totalRequests > 100) {
       warnings.push(
         this.createWarning(
           "too_many_requests",
           `High number of HTTP requests (${resourceMetrics.totalRequests}). Consider combining resources`,
-          { totalRequests: resourceMetrics.totalRequests }
+          {
+            totalRequests: resourceMetrics.totalRequests,
+          }
         )
       );
     }
@@ -306,7 +329,9 @@ class PerformanceAuditor extends BaseAuditor {
           `Large total page size (${Math.round(
             resourceMetrics.totalSize / 1024 / 1024
           )}MB). Consider optimizing resources`,
-          { totalSize: resourceMetrics.totalSize }
+          {
+            totalSize: resourceMetrics.totalSize,
+          }
         )
       );
     }
@@ -373,4 +398,4 @@ class PerformanceAuditor extends BaseAuditor {
   }
 }
 
-module.exports = PerformanceAuditor;
+export default PerformanceAuditor;

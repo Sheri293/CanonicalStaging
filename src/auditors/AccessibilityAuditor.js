@@ -1,4 +1,4 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class AccessibilityAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -213,7 +213,10 @@ class AccessibilityAuditor extends BaseAuditor {
         this.createWarning(
           "image_empty_alt",
           "Image has empty alt attribute but may not be decorative",
-          { src: img.src, index: img.index }
+          {
+            src: img.src,
+            index: img.index,
+          }
         )
       );
     });
@@ -234,7 +237,7 @@ class AccessibilityAuditor extends BaseAuditor {
     }
   }
 
-  auditLinks(links, issues, warnings, recommendations) {
+  auditLinks(links, issues, recommendations) {
     const emptyLinks = links.filter((link) => link.isEmpty);
     const externalLinksWithoutWarning = links.filter(
       (link) =>
@@ -255,7 +258,10 @@ class AccessibilityAuditor extends BaseAuditor {
         this.createRecommendation(
           "external_link_indication",
           "Consider indicating external links for better user experience",
-          { href: link.href, text: link.text }
+          {
+            href: link.href,
+            text: link.text,
+          }
         )
       );
     });
@@ -271,7 +277,7 @@ class AccessibilityAuditor extends BaseAuditor {
         issues.push(
           this.createError(
             "form_input_missing_label",
-            `Form input missing accessible label`,
+            "Form input missing accessible label",
             {
               formIndex,
               inputIndex: input.index,
@@ -308,14 +314,17 @@ class AccessibilityAuditor extends BaseAuditor {
           this.createRecommendation(
             "use_fieldset_legend",
             "Consider using fieldset and legend for complex forms",
-            { formIndex, inputCount: form.inputs.length }
+            {
+              formIndex,
+              inputCount: form.inputs.length,
+            }
           )
         );
       }
     });
   }
 
-  auditHeadings(headings, issues, warnings, recommendations) {
+  auditHeadings(headings, issues, warnings) {
     const emptyHeadings = headings.filter((h) => h.isEmpty);
 
     emptyHeadings.forEach((heading) => {
@@ -323,13 +332,16 @@ class AccessibilityAuditor extends BaseAuditor {
         this.createError(
           "accessibility_empty_heading",
           `Empty H${heading.level} heading affects screen reader navigation`,
-          { level: heading.level, index: heading.index }
+          {
+            level: heading.level,
+            index: heading.index,
+          }
         )
       );
     });
 
     let previousLevel = 0;
-    headings.forEach((heading, index) => {
+    headings.forEach((heading) => {
       if (heading.level > previousLevel + 1) {
         warnings.push(
           this.createWarning(
@@ -408,4 +420,4 @@ class AccessibilityAuditor extends BaseAuditor {
   }
 }
 
-module.exports = AccessibilityAuditor;
+export default AccessibilityAuditor;

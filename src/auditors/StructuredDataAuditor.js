@@ -1,11 +1,11 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class StructuredDataAuditor extends BaseAuditor {
   constructor(config = {}) {
     super(config);
   }
 
-  async audit(page, url) {
+  async audit(page) {
     try {
       const structuredData = await this.extractStructuredData(page);
       const issues = [];
@@ -170,7 +170,11 @@ class StructuredDataAuditor extends BaseAuditor {
             this.createError(
               "invalid_json_ld",
               `JSON-LD schema ${index + 1} contains invalid JSON`,
-              { index, error: schema.error, raw: schema.raw }
+              {
+                index,
+                error: schema.error,
+                raw: schema.raw,
+              }
             )
           );
         } else {
@@ -222,7 +226,10 @@ class StructuredDataAuditor extends BaseAuditor {
         this.createWarning(
           "missing_context",
           `JSON-LD schema ${identifier} is missing @context`,
-          { identifier, type: item["@type"] }
+          {
+            identifier,
+            type: item["@type"],
+          }
         )
       );
     }
@@ -283,7 +290,7 @@ class StructuredDataAuditor extends BaseAuditor {
   validateOrganizationSchema(
     item,
     issues,
-    warnings,
+
     recommendations,
     identifier
   ) {
@@ -296,7 +303,11 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createError(
             "missing_required_field",
             `Organization schema ${identifier} missing required field: ${field}`,
-            { identifier, field, type: "Organization" }
+            {
+              identifier,
+              field,
+              type: "Organization",
+            }
           )
         );
       }
@@ -308,14 +319,18 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createRecommendation(
             "add_recommended_field",
             `Consider adding ${field} to Organization schema ${identifier}`,
-            { identifier, field, type: "Organization" }
+            {
+              identifier,
+              field,
+              type: "Organization",
+            }
           )
         );
       }
     });
   }
 
-  validateWebPageSchema(item, issues, warnings, recommendations, identifier) {
+  validateWebPageSchema(item, issues, recommendations, identifier) {
     const requiredFields = ["name", "url"];
 
     requiredFields.forEach((field) => {
@@ -324,7 +339,11 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createError(
             "missing_required_field",
             `WebPage schema ${identifier} missing required field: ${field}`,
-            { identifier, field, type: item["@type"] }
+            {
+              identifier,
+              field,
+              type: item["@type"],
+            }
           )
         );
       }
@@ -335,13 +354,16 @@ class StructuredDataAuditor extends BaseAuditor {
         this.createRecommendation(
           "add_description",
           `Consider adding description to WebPage schema ${identifier}`,
-          { identifier, type: item["@type"] }
+          {
+            identifier,
+            type: item["@type"],
+          }
         )
       );
     }
   }
 
-  validateArticleSchema(item, issues, warnings, recommendations, identifier) {
+  validateArticleSchema(item, issues, warnings, identifier) {
     const requiredFields = ["headline", "author", "datePublished"];
 
     requiredFields.forEach((field) => {
@@ -350,7 +372,11 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createError(
             "missing_required_field",
             `Article schema ${identifier} missing required field: ${field}`,
-            { identifier, field, type: "Article" }
+            {
+              identifier,
+              field,
+              type: "Article",
+            }
           )
         );
       }
@@ -367,7 +393,7 @@ class StructuredDataAuditor extends BaseAuditor {
     }
   }
 
-  validateProductSchema(item, issues, warnings, recommendations, identifier) {
+  validateProductSchema(item, issues, warnings, identifier) {
     const requiredFields = ["name", "image", "description"];
 
     requiredFields.forEach((field) => {
@@ -376,7 +402,11 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createError(
             "missing_required_field",
             `Product schema ${identifier} missing required field: ${field}`,
-            { identifier, field, type: "Product" }
+            {
+              identifier,
+              field,
+              type: "Product",
+            }
           )
         );
       }
@@ -396,7 +426,7 @@ class StructuredDataAuditor extends BaseAuditor {
   validateLocalBusinessSchema(
     item,
     issues,
-    warnings,
+
     recommendations,
     identifier
   ) {
@@ -408,7 +438,11 @@ class StructuredDataAuditor extends BaseAuditor {
           this.createError(
             "missing_required_field",
             `LocalBusiness schema ${identifier} missing required field: ${field}`,
-            { identifier, field, type: "LocalBusiness" }
+            {
+              identifier,
+              field,
+              type: "LocalBusiness",
+            }
           )
         );
       }
@@ -425,7 +459,7 @@ class StructuredDataAuditor extends BaseAuditor {
     }
   }
 
-  auditMicrodata(microdataData, issues, warnings, recommendations) {
+  auditMicrodata(microdataData, warnings, recommendations) {
     if (microdataData.length === 0) {
       recommendations.push(
         this.createRecommendation(
@@ -450,7 +484,10 @@ class StructuredDataAuditor extends BaseAuditor {
             this.createWarning(
               "microdata_no_properties",
               `Microdata item ${index + 1} has no properties`,
-              { index, itemType: item.itemType }
+              {
+                index,
+                itemType: item.itemType,
+              }
             )
           );
         }
@@ -458,7 +495,7 @@ class StructuredDataAuditor extends BaseAuditor {
     }
   }
 
-  auditRdfa(rdfaData, issues, warnings, recommendations) {
+  auditRdfa(rdfaData, warnings, recommendations) {
     if (rdfaData.length === 0) {
       recommendations.push(
         this.createRecommendation(
@@ -503,4 +540,4 @@ class StructuredDataAuditor extends BaseAuditor {
   }
 }
 
-module.exports = StructuredDataAuditor;
+export default StructuredDataAuditor;

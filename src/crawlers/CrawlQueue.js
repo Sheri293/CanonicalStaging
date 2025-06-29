@@ -31,4 +31,4 @@ class CrawlQueue {
   }
 }
 
-module.exports = CrawlQueue;
+export default CrawlQueue;

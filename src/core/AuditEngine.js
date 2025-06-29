@@ -1,13 +1,16 @@
-const Logger = require("../utils/Logger");
-const CanonicalAuditor = require("../auditors/CanonicalAuditor");
-const MetaTagAuditor = require("../auditors/MetaTagAuditor");
-const HeadingAuditor = require("../auditors/HeadingAuditor");
-const RedirectAuditor = require("../auditors/RedirectAuditor");
-const BrokenLinkAuditor = require("../auditors/BrokenLinkAuditor");
-const StructuredDataAuditor = require("../auditors/StructuredDataAuditor");
-const PerformanceAuditor = require("../auditors/PerformanceAuditor");
-const AccessibilityAuditor = require("../auditors/AccessibilityAuditor");
-const AuditResult = require("../models/AuditResult");
+import { chromium } from "playwright";
+import Logger from "../utils/Logger.js";
+import CanonicalAuditor from "../auditors/CanonicalAuditor.js";
+import MetaTagAuditor from "../auditors/MetaTagAuditor.js";
+import HeadingAuditor from "../auditors/HeadingAuditor.js";
+import RedirectAuditor from "../auditors/RedirectAuditor.js";
+import BrokenLinkAuditor from "../auditors/BrokenLinkAuditor.js";
+import StructuredDataAuditor from "../auditors/StructuredDataAuditor.js";
+import PerformanceAuditor from "../auditors/PerformanceAuditor.js";
+import AccessibilityAuditor from "../auditors/AccessibilityAuditor.js";
+import VisualRegressionAuditor from "../auditors/VisualRegressionAuditor.js";
+import HTMLStructureAuditor from "../auditors/HTMLStructureAuditor.js";
+import AuditResult from "../models/AuditResult.js";
 
 class AuditEngine {
   constructor(config = {}) {
@@ -21,12 +24,75 @@ class AuditEngine {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       includePerformance: config.includePerformance || false,
       includeAccessibility: config.includeAccessibility || false,
+      includeVisualRegression: config.includeVisualRegression || false,
+      includeStructureComparison: config.includeStructureComparison || false,
       humanSimulation: config.humanSimulation !== false,
       keepWindowsOpen: config.keepWindowsOpen || false,
       windowDisplayTime: config.windowDisplayTime || 8000,
       headless: config.headless !== false,
       rateLimitDelay: config.rateLimitDelay || 30000,
       maxRetryDelay: config.maxRetryDelay || 120000,
+
+      visualRegression: {
+        baselineDir:
+          config.visualRegression?.baselineDir || "./baselines/screenshots",
+        currentDir:
+          config.visualRegression?.currentDir || "./current/screenshots",
+        diffDir: config.visualRegression?.diffDir || "./diffs/screenshots",
+        threshold: config.visualRegression?.threshold || 0.1,
+        captureViewports: config.visualRegression?.captureViewports || [
+          { width: 1920, height: 1080, name: "desktop" },
+          { width: 768, height: 1024, name: "tablet" },
+          { width: 375, height: 667, name: "mobile" },
+        ],
+        captureElements: config.visualRegression?.captureElements || [
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "header",
+          "nav",
+          "main",
+          "footer",
+          ".hero",
+          ".content",
+          ".sidebar",
+        ],
+        ...config.visualRegression,
+      },
+
+      htmlStructure: {
+        baselineDir:
+          config.htmlStructure?.baselineDir || "./baselines/structure",
+        ignoreAttributes: config.htmlStructure?.ignoreAttributes || [
+          "class",
+          "id",
+          "style",
+        ],
+        importantElements: config.htmlStructure?.importantElements || [
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "title",
+          'meta[name="description"]',
+          'meta[name="keywords"]',
+          "header",
+          "nav",
+          "main",
+          "section",
+          "article",
+          "aside",
+          "footer",
+        ],
+        styleAnalysis: config.htmlStructure?.styleAnalysis !== false,
+        ...config.htmlStructure,
+      },
+
       ...config,
     };
 
@@ -50,10 +116,11 @@ class AuditEngine {
           pageLoadDelay: this.config.pageLoadDelay,
           rateLimitDelay: this.config.rateLimitDelay,
           humanSimulation: this.config.humanSimulation,
+          includeVisualRegression: this.config.includeVisualRegression,
+          includeStructureComparison: this.config.includeStructureComparison,
         }
       );
 
-      const { chromium } = require("playwright");
       this.browser = await chromium.launch({
         headless: this.config.headless,
         slowMo: this.config.humanSimulation ? 150 : 0,
@@ -133,6 +200,20 @@ class AuditEngine {
       };
     }
 
+    if (this.config.includeVisualRegression) {
+      auditorConfigs.visualRegression = {
+        ...this.config.visualRegression,
+        browser: this.browser,
+      };
+    }
+
+    if (this.config.includeStructureComparison) {
+      auditorConfigs.htmlStructure = {
+        ...this.config.htmlStructure,
+        browser: this.browser,
+      };
+    }
+
     this.auditors.set(
       "canonical",
       new CanonicalAuditor(auditorConfigs.canonical)
@@ -163,6 +244,20 @@ class AuditEngine {
       this.auditors.set(
         "accessibility",
         new AccessibilityAuditor(auditorConfigs.accessibility)
+      );
+    }
+
+    if (this.config.includeVisualRegression) {
+      this.auditors.set(
+        "visualRegression",
+        new VisualRegressionAuditor(auditorConfigs.visualRegression)
+      );
+    }
+
+    if (this.config.includeStructureComparison) {
+      this.auditors.set(
+        "htmlStructure",
+        new HTMLStructureAuditor(auditorConfigs.htmlStructure)
       );
     }
 
@@ -404,9 +499,7 @@ class AuditEngine {
 
       this.logger.info(
         `Running ${auditPromises.length} auditors for: ${crawlResult.url}`,
-        {
-          auditors: enabledAuditors,
-        }
+        { auditors: enabledAuditors }
       );
 
       const auditResults = await Promise.allSettled(auditPromises);
@@ -516,7 +609,7 @@ class AuditEngine {
     }
   }
 
-  async handleRateLimit(crawlResult, statusCode) {
+  async handleRateLimit(crawlResult) {
     const url = crawlResult.url;
     const retryCount = this.rateLimitRetries.get(url) || 0;
 
@@ -576,6 +669,7 @@ class AuditEngine {
       Object.defineProperty(navigator, "hardwareConcurrency", {
         get: () => 4,
       });
+
       window.chrome = {
         runtime: {},
         loadTimes: function () {
@@ -846,6 +940,21 @@ class AuditEngine {
       return true;
     }
 
+    if (
+      auditorName === "visualRegression" &&
+      (options.includeVisualRegression || this.config.includeVisualRegression)
+    ) {
+      return true;
+    }
+
+    if (
+      auditorName === "htmlStructure" &&
+      (options.includeStructureComparison ||
+        this.config.includeStructureComparison)
+    ) {
+      return true;
+    }
+
     return false;
   }
 
@@ -859,6 +968,8 @@ class AuditEngine {
       structuredData: [],
       performance: null,
       accessibility: null,
+      visualRegression: null,
+      htmlStructure: null,
       issues: [],
       warnings: [],
       recommendations: [],
@@ -921,6 +1032,99 @@ class AuditEngine {
     });
 
     return compiled;
+  }
+
+  async createBaselines(landingUrl, options = {}) {
+    try {
+      this.logger.info(
+        "Creating baselines for visual regression and structure comparison"
+      );
+
+      const CrawlerEngine = require("./CrawlerEngine");
+      const crawlerEngine = new CrawlerEngine(this.config.crawler);
+      await crawlerEngine.initialize();
+
+      const crawlResults = await crawlerEngine.discoverUrls(
+        landingUrl,
+        options
+      );
+
+      const results = [];
+
+      for (const crawlResult of crawlResults) {
+        try {
+          const context = await this.browser.newContext({
+            userAgent: this.config.userAgent,
+            viewport: { width: 1366, height: 768 },
+            ignoreHTTPSErrors: true,
+          });
+
+          const page = await context.newPage();
+          await this.setupPageForHumanSimulation(page);
+
+          const response = await page.goto(crawlResult.url, {
+            waitUntil: "domcontentloaded",
+            timeout: this.config.timeout,
+          });
+
+          if (response && response.status() < 400) {
+            await this.sleep(this.config.pageLoadDelay);
+
+            const baselineResults = {};
+
+            if (this.auditors.has("visualRegression")) {
+              const visualAuditor = this.auditors.get("visualRegression");
+              baselineResults.visual = await visualAuditor.createBaseline(
+                page,
+                crawlResult.url
+              );
+            }
+
+            if (this.auditors.has("htmlStructure")) {
+              const structureAuditor = this.auditors.get("htmlStructure");
+              baselineResults.structure = await structureAuditor.createBaseline(
+                page,
+                crawlResult.url
+              );
+            }
+
+            results.push({
+              url: crawlResult.url,
+              success: true,
+              baselines: baselineResults,
+            });
+
+            this.logger.success(`Baselines created for: ${crawlResult.url}`);
+          }
+
+          await page.close();
+          await context.close();
+        } catch (error) {
+          this.logger.error(
+            `Failed to create baseline for ${crawlResult.url}`,
+            error
+          );
+          results.push({
+            url: crawlResult.url,
+            success: false,
+            error: error.message,
+          });
+        }
+      }
+
+      await crawlerEngine.cleanup();
+
+      this.logger.success("Baseline creation completed", {
+        total: results.length,
+        successful: results.filter((r) => r.success).length,
+        failed: results.filter((r) => !r.success).length,
+      });
+
+      return results;
+    } catch (error) {
+      this.logger.error("Baseline creation failed", error);
+      throw error;
+    }
   }
 
   async cleanup() {
@@ -1011,7 +1215,7 @@ class AuditEngine {
       await page.close();
       await context.close();
 
-      for (const [name, auditor] of this.auditors) {
+      for (const [auditor] of this.auditors) {
         if (auditor.healthCheck) {
           await auditor.healthCheck();
         }
@@ -1048,6 +1252,8 @@ class AuditEngine {
         concurrent: this.config.concurrent,
         humanSimulation: this.config.humanSimulation,
         rateLimitDelay: this.config.rateLimitDelay,
+        includeVisualRegression: this.config.includeVisualRegression,
+        includeStructureComparison: this.config.includeStructureComparison,
       },
     };
 
@@ -1100,7 +1306,7 @@ class AuditEngine {
       retryDistribution: {},
     };
 
-    for (const [url, retryCount] of this.rateLimitRetries) {
+    for (const [retryCount] of this.rateLimitRetries) {
       stats.retryDistribution[retryCount] =
         (stats.retryDistribution[retryCount] || 0) + 1;
     }
@@ -1129,4 +1335,4 @@ class AuditEngine {
   }
 }
 
-module.exports = AuditEngine;
+export default AuditEngine;

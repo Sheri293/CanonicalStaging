@@ -1,7 +1,7 @@
-const fs = require("fs-extra");
-const path = require("path");
-const handlebars = require("handlebars");
-const Logger = require("../utils/Logger");
+import fs from "fs-extra";
+import path from "path";
+import handlebars from "handlebars";
+import Logger from "../utils/Logger.js";
 
 class HTMLReporter {
   constructor(config = {}) {
@@ -865,4 +865,4 @@ class HTMLReporter {
   }
 }
 
-module.exports = HTMLReporter;
+export default HTMLReporter;

@@ -1,11 +1,11 @@
-const { chromium } = require("playwright");
-const Logger = require("../utils/Logger");
-const LinkDiscovery = require("../crawlers/LinkDiscovery");
-const UrlResolver = require("../crawlers/UrlResolver");
-const CrawlQueue = require("../crawlers/CrawlQueue");
-const RateLimiter = require("../utils/RateLimiter");
-const Cache = require("../utils/Cache");
-const CrawlResult = require("../models/CrawlResult");
+import { chromium } from "playwright";
+import Logger from "../utils/Logger.js";
+import LinkDiscovery from "../crawlers/LinkDiscovery.js";
+import UrlResolver from "../crawlers/UrlResolver.js";
+import CrawlQueue from "../crawlers/CrawlQueue.js";
+import RateLimiter from "../utils/RateLimiter.js";
+import Cache from "../utils/Cache.js";
+import CrawlResult from "../models/CrawlResult.js";
 
 class CrawlerEngine {
   constructor(config = {}) {
@@ -571,4 +571,4 @@ class CrawlerEngine {
   }
 }
 
-module.exports = CrawlerEngine;
+export default CrawlerEngine;

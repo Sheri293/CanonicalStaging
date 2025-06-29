@@ -1,4 +1,4 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class MetaTagAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -9,7 +9,7 @@ class MetaTagAuditor extends BaseAuditor {
     this.descriptionMaxLength = config.descriptionMaxLength || 160;
   }
 
-  async audit(page, url) {
+  async audit(page) {
     try {
       const metaData = await page.evaluate(() => {
         const title = document.title || "";
@@ -95,7 +95,7 @@ class MetaTagAuditor extends BaseAuditor {
     }
   }
 
-  auditTitle(title, issues, warnings, recommendations) {
+  auditTitle(title, issues, warnings) {
     if (!title || title.trim() === "") {
       issues.push(
         this.createError("missing_title", "Page is missing title tag", {
@@ -110,7 +110,10 @@ class MetaTagAuditor extends BaseAuditor {
           this.createWarning(
             "title_too_short",
             `Title is too short (${titleLength} characters). Recommended: ${this.titleMinLength}-${this.titleMaxLength}`,
-            { title, length: titleLength }
+            {
+              title,
+              length: titleLength,
+            }
           )
         );
       }
@@ -120,14 +123,17 @@ class MetaTagAuditor extends BaseAuditor {
           this.createWarning(
             "title_too_long",
             `Title is too long (${titleLength} characters). Recommended: ${this.titleMinLength}-${this.titleMaxLength}`,
-            { title, length: titleLength }
+            {
+              title,
+              length: titleLength,
+            }
           )
         );
       }
     }
   }
 
-  auditDescription(description, issues, warnings, recommendations) {
+  auditDescription(description, issues, warnings) {
     if (!description || description.trim() === "") {
       issues.push(
         this.createError(
@@ -144,7 +150,10 @@ class MetaTagAuditor extends BaseAuditor {
           this.createWarning(
             "description_too_short",
             `Meta description is too short (${descLength} characters). Recommended: ${this.descriptionMinLength}-${this.descriptionMaxLength}`,
-            { description, length: descLength }
+            {
+              description,
+              length: descLength,
+            }
           )
         );
       }
@@ -154,14 +163,17 @@ class MetaTagAuditor extends BaseAuditor {
           this.createWarning(
             "description_too_long",
             `Meta description is too long (${descLength} characters). Recommended: ${this.descriptionMinLength}-${this.descriptionMaxLength}`,
-            { description, length: descLength }
+            {
+              description,
+              length: descLength,
+            }
           )
         );
       }
     }
   }
 
-  auditViewport(viewport, issues, warnings, recommendations) {
+  auditViewport(viewport, warnings) {
     if (!viewport) {
       warnings.push(
         this.createWarning(
@@ -181,7 +193,7 @@ class MetaTagAuditor extends BaseAuditor {
     }
   }
 
-  auditOpenGraph(metaData, issues, warnings, recommendations) {
+  auditOpenGraph(metaData, recommendations) {
     if (!metaData.ogTitle) {
       recommendations.push(
         this.createRecommendation(
@@ -210,7 +222,7 @@ class MetaTagAuditor extends BaseAuditor {
     }
   }
 
-  auditTwitterCards(metaData, issues, warnings, recommendations) {
+  auditTwitterCards(metaData, recommendations) {
     if (!metaData.twitterCard) {
       recommendations.push(
         this.createRecommendation(
@@ -221,7 +233,7 @@ class MetaTagAuditor extends BaseAuditor {
     }
   }
 
-  auditRobots(robots, issues, warnings, recommendations) {
+  auditRobots(robots, warnings) {
     if (robots) {
       if (robots.includes("noindex")) {
         warnings.push(
@@ -253,4 +265,4 @@ class MetaTagAuditor extends BaseAuditor {
   }
 }
 
-module.exports = MetaTagAuditor;
+export default MetaTagAuditor;

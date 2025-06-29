@@ -10,4 +10,4 @@ class CrawlResult {
   }
 }
 
-module.exports = CrawlResult;
+export default CrawlResult;

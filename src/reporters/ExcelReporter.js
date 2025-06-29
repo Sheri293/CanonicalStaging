@@ -1,14 +1,57 @@
-const ExcelJS = require("exceljs");
-const path = require("path");
-const fs = require("fs-extra");
-const Logger = require("../utils/Logger");
+import ExcelJS from "exceljs";
+import path from "path";
+import fs from "fs-extra";
+import Logger from "../utils/Logger.js";
 
 class ExcelReporter {
+  static COLORS = {
+    EXCELLENT: "FF90EE90",
+    WARNING: "FFFFFF00",
+    ERROR: "FFFF6B6B",
+    CRITICAL: "FFFF0000",
+    SAFE: "FFE8F5E8",
+    HEADER: "FFE0E0E0",
+    FAILED: "FFFFE0E0",
+  };
+
+  static THRESHOLDS = {
+    TITLE: { MIN: 30, MAX: 60 },
+    DESCRIPTION: { MIN: 120, MAX: 160 },
+    PERFORMANCE: {
+      FCP: { GOOD: 1800, POOR: 2500 },
+      LCP: { GOOD: 2500, POOR: 4000 },
+      CLS: { GOOD: 0.1, POOR: 0.25 },
+    },
+    SCORE: { GOOD: 80, FAIR: 60 },
+    VISUAL_DIFF: { MINOR: 20, MAJOR: 50 },
+  };
+
+  static CATEGORIES = {
+    missing_canonical: "Canonical",
+    invalid_canonical: "Canonical",
+    missing_title: "Meta Tags",
+    missing_description: "Meta Tags",
+    title_too_short: "Meta Tags",
+    title_too_long: "Meta Tags",
+    description_too_short: "Meta Tags",
+    description_too_long: "Meta Tags",
+    missing_h1: "Headings",
+    multiple_h1: "Headings",
+    empty_heading: "Headings",
+    broken_link: "Links",
+    broken_image: "Links",
+    missing_json_ld: "Structured Data",
+    invalid_json_ld: "Structured Data",
+    poor_fcp: "Performance",
+    poor_lcp: "Performance",
+    poor_cls: "Performance",
+  };
+
   constructor(config = {}) {
     this.config = {
-      outputDir: config.outputDir || "./reports/excel",
-      filename: config.filename || null,
-      includeCharts: config.includeCharts !== false,
+      outputDir: "./reports/excel",
+      filename: null,
+      includeCharts: true,
       ...config,
     };
     this.logger = new Logger("ExcelReporter");
@@ -25,29 +68,40 @@ class ExcelReporter {
         }.xlsx`;
       const filePath = path.join(this.config.outputDir, filename);
 
-      const workbook = new ExcelJS.Workbook();
+      const workbook = this.createWorkbook();
 
-      workbook.creator = "SEO Landing Page Auditor";
-      workbook.lastModifiedBy = "SEO Landing Page Auditor";
-      workbook.created = new Date();
-      workbook.modified = new Date();
+      await Promise.all([
+        this.createSummarySheet(workbook, summary),
+        this.createDetailedResultsSheet(workbook, auditResults),
+        this.createIssuesSheet(workbook, auditResults),
+        this.createCanonicalSheet(workbook, auditResults),
+        this.createMetaTagsSheet(workbook, auditResults),
+        this.createHeadingsSheet(workbook, auditResults),
+        this.createBrokenLinksSheet(workbook, auditResults),
+        this.createStructuredDataSheet(workbook, auditResults),
+      ]);
 
-      await this.createSummarySheet(workbook, summary);
-      await this.createDetailedResultsSheet(workbook, auditResults);
-      await this.createIssuesSheet(workbook, auditResults);
-      await this.createCanonicalSheet(workbook, auditResults);
-      await this.createMetaTagsSheet(workbook, auditResults);
-      await this.createHeadingsSheet(workbook, auditResults);
-      await this.createBrokenLinksSheet(workbook, auditResults);
-      await this.createStructuredDataSheet(workbook, auditResults);
+      const conditionalSheets = [
+        {
+          condition: auditResults.some((r) => r.performance),
+          method: this.createPerformanceSheet,
+        },
+        {
+          condition: auditResults.some((r) => r.accessibility),
+          method: this.createAccessibilitySheet,
+        },
+      ];
 
-      if (auditResults.some((r) => r.performance)) {
-        await this.createPerformanceSheet(workbook, auditResults);
-      }
+      await Promise.all(
+        conditionalSheets
+          .filter(({ condition }) => condition)
+          .map(({ method }) => method.call(this, workbook, auditResults))
+      );
 
-      if (auditResults.some((r) => r.accessibility)) {
-        await this.createAccessibilitySheet(workbook, auditResults);
-      }
+      await Promise.all([
+        this.createVisualRegressionSheet(workbook, auditResults),
+        this.createH1ManipulationSheet(workbook, auditResults),
+      ]);
 
       await workbook.xlsx.writeFile(filePath);
 
@@ -65,84 +119,179 @@ class ExcelReporter {
     }
   }
 
-  async createSummarySheet(workbook, summary) {
-    const sheet = workbook.addWorksheet("Summary");
+  createWorkbook() {
+    const workbook = new ExcelJS.Workbook();
+    const now = new Date();
 
-    sheet.mergeCells("A1:D1");
-    sheet.getCell("A1").value = "SEO AUDIT SUMMARY";
-    sheet.getCell("A1").font = { size: 18, bold: true };
-    sheet.getCell("A1").alignment = { horizontal: "center" };
-
-    const summaryData = [
-      ["Audit ID", summary.auditId],
-      ["Landing Page URL", summary.landingUrl],
-      ["Audit Date", new Date(summary.startTime).toLocaleString()],
-      ["Duration", this.formatDuration(summary.duration)],
-      ["Total URLs Audited", summary.totalUrls],
-      ["Successful Audits", summary.successfulAudits],
-      ["Failed Audits", summary.failedAudits],
-      ["Success Rate", `${summary.successRate}%`],
-      ["Overall Score", `${summary.auditScore}/100`],
-      ["Critical Issues", summary.criticalIssues],
-      ["Total Warnings", summary.totalWarnings],
-      ["Canonical Issues", summary.canonicalIssues],
-      ["Meta Tag Issues", summary.metaTagIssues],
-      ["Heading Issues", summary.headingIssues],
-      ["Broken Links", summary.brokenLinksCount],
-      ["Redirects Found", summary.redirectsCount],
-      ["Average Load Time", `${summary.avgLoadTime}ms`],
-    ];
-
-    summaryData.forEach((row, index) => {
-      const rowNum = index + 3;
-      sheet.getCell(`A${rowNum}`).value = row[0];
-      sheet.getCell(`B${rowNum}`).value = row[1];
-      sheet.getCell(`A${rowNum}`).font = { bold: true };
+    Object.assign(workbook, {
+      creator: "SEO Landing Page Auditor",
+      lastModifiedBy: "SEO Landing Page Auditor",
+      created: now,
+      modified: now,
     });
 
-    sheet.getColumn("A").width = 25;
-    sheet.getColumn("B").width = 30;
+    return workbook;
+  }
 
-    const scoreCell = sheet.getCell("B11");
-    if (summary.auditScore >= 80) {
-      scoreCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF90EE90" },
-      };
-    } else if (summary.auditScore >= 60) {
-      scoreCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFFF00" },
-      };
-    } else {
-      scoreCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFF6B6B" },
-      };
-    }
+  safeNumber = (value) => {
+    if (value === null || value === undefined || isNaN(value)) return 0;
+    return typeof value === "number" ? value : parseInt(value) || 0;
+  };
 
-    const criticalIssuesCell = sheet.getCell("B12");
-    if (summary.criticalIssues > 0) {
-      criticalIssuesCell.fill = {
+  createHeaderRow(sheet, headers) {
+    headers.forEach((header, index) => {
+      const cell = sheet.getCell(1, index + 1);
+      Object.assign(cell, {
+        value: header,
+        font: { bold: true },
+        fill: {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: ExcelReporter.COLORS.HEADER },
+        },
+      });
+    });
+  }
+
+  applyScoreColor(cell, score, thresholds = ExcelReporter.THRESHOLDS.SCORE) {
+    const safeScore = this.safeNumber(score);
+    const color =
+      safeScore >= thresholds.GOOD
+        ? ExcelReporter.COLORS.EXCELLENT
+        : safeScore >= thresholds.FAIR
+          ? ExcelReporter.COLORS.WARNING
+          : ExcelReporter.COLORS.ERROR;
+
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
+  }
+
+  applyRowColor(sheet, row, columnCount, color) {
+    for (let col = 1; col <= columnCount; col++) {
+      sheet.getCell(row, col).fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FFFF6B6B" },
-      };
-    } else {
-      criticalIssuesCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF90EE90" },
+        fgColor: { argb: color },
       };
     }
   }
 
+  async createSummarySheet(workbook, summary) {
+    const sheet = workbook.addWorksheet("Summary");
+
+    sheet.mergeCells("A1:D1");
+    Object.assign(sheet.getCell("A1"), {
+      value: "SEO AUDIT SUMMARY",
+      font: { size: 18, bold: true },
+      alignment: { horizontal: "center" },
+    });
+
+    const summaryData = [
+      ["Audit ID", summary.auditId || "Unknown"],
+      ["Landing Page URL", summary.landingUrl || "Unknown"],
+      [
+        "Audit Date",
+        summary.startTime
+          ? new Date(summary.startTime).toLocaleString()
+          : "Unknown",
+      ],
+      [
+        "Duration",
+        summary.duration ? this.formatDuration(summary.duration) : "Unknown",
+      ],
+      ["Total URLs Audited", this.safeNumber(summary.totalUrls)],
+      ["Successful Audits", this.safeNumber(summary.successfulAudits)],
+      ["Failed Audits", this.safeNumber(summary.failedAudits)],
+      ["Success Rate", `${this.safeNumber(summary.successRate)}%`],
+      ["Overall Score", `${this.safeNumber(summary.auditScore)}/100`],
+      ["Critical Issues", this.safeNumber(summary.criticalIssues)],
+      ["Total Warnings", this.safeNumber(summary.totalWarnings)],
+      ["Canonical Issues", this.safeNumber(summary.canonicalIssues)],
+      ["Meta Tag Issues", this.safeNumber(summary.metaTagIssues)],
+      ["Heading Issues", this.safeNumber(summary.headingIssues)],
+      ["Broken Links", this.safeNumber(summary.brokenLinksCount)],
+      ["Redirects Found", this.safeNumber(summary.redirectsCount)],
+      ["Average Load Time", `${this.safeNumber(summary.avgLoadTime)}ms`],
+      ["Visual Changes", this.safeNumber(summary.visualChanges)],
+      ["H1 Manipulations", this.safeNumber(summary.h1Manipulations)],
+      [
+        "Structure Manipulations",
+        this.safeNumber(summary.structureManipulations),
+      ],
+    ];
+
+    summaryData.forEach(([label, value], index) => {
+      const rowNum = index + 3;
+      Object.assign(sheet.getCell(`A${rowNum}`), {
+        value: label,
+        font: { bold: true },
+      });
+      sheet.getCell(`B${rowNum}`).value = value;
+    });
+
+    [sheet.getColumn("A"), sheet.getColumn("B")].forEach((col, idx) => {
+      col.width = [25, 30][idx];
+    });
+
+    const specialCells = [
+      { cell: "B11", value: summary.auditScore, isScore: true },
+      { cell: "B12", value: summary.criticalIssues, isError: true },
+      { cell: "B20", value: summary.visualChanges, isWarning: true },
+      { cell: "B21", value: summary.h1Manipulations, isCritical: true },
+    ];
+
+    specialCells.forEach(
+      ({ cell, value, isScore, isError, isWarning, isCritical }) => {
+        const cellObj = sheet.getCell(cell);
+        const safeValue = this.safeNumber(value);
+
+        if (isScore) {
+          this.applyScoreColor(cellObj, safeValue);
+        } else if (isError) {
+          cellObj.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb:
+                safeValue > 0
+                  ? ExcelReporter.COLORS.ERROR
+                  : ExcelReporter.COLORS.EXCELLENT,
+            },
+          };
+        } else if (isWarning) {
+          cellObj.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: {
+              argb:
+                safeValue > 0
+                  ? ExcelReporter.COLORS.WARNING
+                  : ExcelReporter.COLORS.EXCELLENT,
+            },
+          };
+        } else if (isCritical) {
+          if (safeValue > 0) {
+            Object.assign(cellObj, {
+              fill: {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: ExcelReporter.COLORS.CRITICAL },
+              },
+              font: { color: { argb: "FFFFFFFF" }, bold: true },
+            });
+          } else {
+            cellObj.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: ExcelReporter.COLORS.EXCELLENT },
+            };
+          }
+        }
+      }
+    );
+  }
+
   async createDetailedResultsSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Detailed Results");
-
     const headers = [
       "URL",
       "Status",
@@ -159,76 +308,47 @@ class ExcelReporter {
       "Structured Data",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
       const row = index + 2;
-      sheet.getCell(row, 1).value = result.url;
-      sheet.getCell(row, 2).value = result.success ? "Success" : "Failed";
-      sheet.getCell(row, 3).value = result.statusCode || "N/A";
-      sheet.getCell(row, 4).value = result.loadTime || 0;
-      sheet.getCell(row, 5).value = result.auditScore || 0;
-      sheet.getCell(row, 6).value =
-        result.issues?.filter((i) => i.severity === "error").length || 0;
-      sheet.getCell(row, 7).value = result.warnings?.length || 0;
-      sheet.getCell(row, 8).value = result.canonical?.hasCanonical
-        ? "Yes"
-        : "No";
-      sheet.getCell(row, 9).value = result.metaTags?.description ? "Yes" : "No";
-      sheet.getCell(row, 10).value = result.headings?.h1Count || 0;
-      sheet.getCell(row, 11).value = result.brokenLinks?.length || 0;
-      sheet.getCell(row, 12).value = result.redirects?.length || 0;
-      sheet.getCell(row, 13).value = result.structuredData?.length || 0;
+      const rowData = [
+        result.url,
+        result.success ? "Success" : "Failed",
+        result.statusCode || "N/A",
+        result.loadTime || 0,
+        result.auditScore || 0,
+        result.issues?.filter((i) => i.severity === "error").length || 0,
+        result.warnings?.length || 0,
+        result.canonical?.hasCanonical ? "Yes" : "No",
+        result.metaTags?.description ? "Yes" : "No",
+        result.headings?.h1Count || 0,
+        result.brokenLinks?.length || 0,
+        result.redirects?.length || 0,
+        result.structuredData?.length || 0,
+      ];
+
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
 
       if (!result.success) {
-        for (let col = 1; col <= headers.length; col++) {
-          sheet.getCell(row, col).fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFFE0E0" },
-          };
-        }
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.FAILED
+        );
       }
 
-      const scoreCell = sheet.getCell(row, 5);
-      const score = result.auditScore || 0;
-      if (score >= 80) {
-        scoreCell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF90EE90" },
-        };
-      } else if (score >= 60) {
-        scoreCell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFFFF00" },
-        };
-      } else {
-        scoreCell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFFF6B6B" },
-        };
-      }
+      this.applyScoreColor(sheet.getCell(row, 5), result.auditScore);
     });
 
-    this.autoSizeColumns(sheet);
-    this.addAutoFilter(sheet, headers.length, auditResults.length + 1);
+    this.finalizeSheet(sheet, headers.length, auditResults.length + 1);
   }
 
   async createIssuesSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Issues & Warnings");
-
     const headers = [
       "URL",
       "Type",
@@ -238,80 +358,41 @@ class ExcelReporter {
       "Details",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     let rowIndex = 2;
-
     auditResults.forEach((result) => {
-      if (result.issues) {
-        result.issues.forEach((issue) => {
-          sheet.getCell(rowIndex, 1).value = result.url;
-          sheet.getCell(rowIndex, 2).value = issue.type;
-          sheet.getCell(rowIndex, 3).value = issue.severity;
-          sheet.getCell(rowIndex, 4).value = this.getCategoryFromType(
-            issue.type
-          );
-          sheet.getCell(rowIndex, 5).value = issue.message;
-          sheet.getCell(rowIndex, 6).value = JSON.stringify(
-            issue.details || {}
-          );
+      [...(result.issues || []), ...(result.warnings || [])].forEach(
+        (issue) => {
+          const rowData = [
+            result.url,
+            issue.type,
+            issue.severity || "warning",
+            ExcelReporter.CATEGORIES[issue.type] || "Other",
+            issue.message,
+            JSON.stringify(issue.details || {}),
+          ];
 
-          if (issue.severity === "error") {
-            for (let col = 1; col <= headers.length; col++) {
-              sheet.getCell(rowIndex, col).fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFFFE0E0" },
-              };
-            }
-          }
+          rowData.forEach((value, colIndex) => {
+            sheet.getCell(rowIndex, colIndex + 1).value = value;
+          });
+
+          const color =
+            issue.severity === "error"
+              ? ExcelReporter.COLORS.FAILED
+              : ExcelReporter.COLORS.WARNING;
+          this.applyRowColor(sheet, rowIndex, headers.length, color);
 
           rowIndex++;
-        });
-      }
-
-      if (result.warnings) {
-        result.warnings.forEach((warning) => {
-          sheet.getCell(rowIndex, 1).value = result.url;
-          sheet.getCell(rowIndex, 2).value = warning.type;
-          sheet.getCell(rowIndex, 3).value = warning.severity || "warning";
-          sheet.getCell(rowIndex, 4).value = this.getCategoryFromType(
-            warning.type
-          );
-          sheet.getCell(rowIndex, 5).value = warning.message;
-          sheet.getCell(rowIndex, 6).value = JSON.stringify(
-            warning.details || {}
-          );
-
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(rowIndex, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFFF00" },
-            };
-          }
-
-          rowIndex++;
-        });
-      }
+        }
+      );
     });
 
-    this.autoSizeColumns(sheet);
-    this.addAutoFilter(sheet, headers.length, rowIndex - 1);
+    this.finalizeSheet(sheet, headers.length, rowIndex - 1);
   }
 
   async createCanonicalSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Canonical URLs");
-
     const headers = [
       "URL",
       "Has Canonical",
@@ -320,37 +401,31 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.canonical) {
-        const row = index + 2;
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = result.canonical.hasCanonical
-          ? "Yes"
-          : "No";
-        sheet.getCell(row, 3).value = result.canonical.canonical || "None";
-        sheet.getCell(row, 4).value = result.canonical.issues?.length || 0;
-        sheet.getCell(row, 5).value = result.canonical.score || 0;
+      const row = index + 2;
+      const canonical = result.canonical || {};
 
-        if (!result.canonical.hasCanonical) {
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(row, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFE0E0" },
-            };
-          }
-        }
+      const rowData = [
+        result.url,
+        canonical.hasCanonical ? "Yes" : "No",
+        canonical.canonical || "None",
+        canonical.issues?.length || 0,
+        canonical.score || 0,
+      ];
+
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
+
+      if (!canonical.hasCanonical) {
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.FAILED
+        );
       }
     });
 
@@ -359,7 +434,6 @@ class ExcelReporter {
 
   async createMetaTagsSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Meta Tags");
-
     const headers = [
       "URL",
       "Title",
@@ -373,65 +447,61 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.metaTags) {
-        const row = index + 2;
-        const meta = result.metaTags;
+      const row = index + 2;
+      const meta = result.metaTags || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = meta.title || "Missing";
-        sheet.getCell(row, 3).value = meta.title ? meta.title.length : 0;
-        sheet.getCell(row, 4).value = meta.description || "Missing";
-        sheet.getCell(row, 5).value = meta.description
-          ? meta.description.length
-          : 0;
-        sheet.getCell(row, 6).value = meta.viewport || "Missing";
-        sheet.getCell(row, 7).value = meta.openGraph?.title ? "Yes" : "No";
-        sheet.getCell(row, 8).value = meta.twitter?.card ? "Yes" : "No";
-        sheet.getCell(row, 9).value = meta.issues?.length || 0;
-        sheet.getCell(row, 10).value = meta.score || 0;
+      const rowData = [
+        result.url,
+        meta.title || "Missing",
+        meta.title?.length || 0,
+        meta.description || "Missing",
+        meta.description?.length || 0,
+        meta.viewport || "Missing",
+        meta.openGraph?.title ? "Yes" : "No",
+        meta.twitter?.card ? "Yes" : "No",
+        meta.issues?.length || 0,
+        meta.score || 0,
+      ];
 
-        if (!meta.title || !meta.description) {
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(row, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFE0E0" },
-            };
-          }
-        }
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
 
-        const titleLengthCell = sheet.getCell(row, 3);
-        const titleLength = meta.title ? meta.title.length : 0;
-        if (titleLength < 30 || titleLength > 60) {
-          titleLengthCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFFFF00" },
-          };
-        }
-
-        const descLengthCell = sheet.getCell(row, 5);
-        const descLength = meta.description ? meta.description.length : 0;
-        if (descLength < 120 || descLength > 160) {
-          descLengthCell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFFFF00" },
-          };
-        }
+      if (!meta.title || !meta.description) {
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.FAILED
+        );
       }
+
+      const titleLength = meta.title?.length || 0;
+      const descLength = meta.description?.length || 0;
+
+      [
+        {
+          cell: sheet.getCell(row, 3),
+          length: titleLength,
+          thresholds: ExcelReporter.THRESHOLDS.TITLE,
+        },
+        {
+          cell: sheet.getCell(row, 5),
+          length: descLength,
+          thresholds: ExcelReporter.THRESHOLDS.DESCRIPTION,
+        },
+      ].forEach(({ cell, length, thresholds }) => {
+        if (length < thresholds.MIN || length > thresholds.MAX) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: ExcelReporter.COLORS.WARNING },
+          };
+        }
+      });
     });
 
     this.autoSizeColumns(sheet);
@@ -439,7 +509,6 @@ class ExcelReporter {
 
   async createHeadingsSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Headings");
-
     const headers = [
       "URL",
       "H1 Count",
@@ -453,56 +522,46 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.headings) {
-        const row = index + 2;
-        const headings = result.headings;
+      const row = index + 2;
+      const headings = result.headings || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = headings.h1Count || 0;
+      const counts = Array.from({ length: 6 }, (_, i) => {
+        const level = i + 1;
+        return level === 1
+          ? headings.h1Count || 0
+          : headings.headings?.filter((h) => h.level === level).length || 0;
+      });
 
-        for (let level = 2; level <= 6; level++) {
-          const count =
-            headings.headings?.filter((h) => h.level === level).length || 0;
-          sheet.getCell(row, level + 1).value = count;
-        }
+      const rowData = [
+        result.url,
+        ...counts,
+        headings.totalHeadings || 0,
+        headings.issues?.length || 0,
+        headings.score || 0,
+      ];
 
-        sheet.getCell(row, 8).value = headings.totalHeadings || 0;
-        sheet.getCell(row, 9).value = headings.issues?.length || 0;
-        sheet.getCell(row, 10).value = headings.score || 0;
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
 
-        const h1Cell = sheet.getCell(row, 2);
-        if (headings.h1Count === 0) {
-          h1Cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFF6B6B" },
-          };
-        } else if (headings.h1Count > 1) {
-          h1Cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFFFF00" },
-          };
-        } else {
-          h1Cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FF90EE90" },
-          };
-        }
-      }
+      const h1Cell = sheet.getCell(row, 2);
+      const h1Count = counts[0];
+
+      const h1Color =
+        h1Count === 0
+          ? ExcelReporter.COLORS.ERROR
+          : h1Count > 1
+            ? ExcelReporter.COLORS.WARNING
+            : ExcelReporter.COLORS.EXCELLENT;
+
+      h1Cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: h1Color },
+      };
     });
 
     this.autoSizeColumns(sheet);
@@ -510,7 +569,6 @@ class ExcelReporter {
 
   async createBrokenLinksSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Broken Links");
-
     const headers = [
       "URL",
       "Total Links",
@@ -521,43 +579,36 @@ class ExcelReporter {
       "Details",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.brokenLinks !== undefined) {
-        const row = index + 2;
+      const row = index + 2;
+      const brokenLinks = result.brokenLinks || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = result.brokenLinks.totalLinks || 0;
-        sheet.getCell(row, 3).value = result.brokenLinks.brokenLinks || 0;
-        sheet.getCell(row, 4).value = result.brokenLinks.workingLinks || 0;
-        sheet.getCell(row, 5).value = result.brokenLinks.externalLinks || 0;
-        sheet.getCell(row, 6).value = result.brokenLinks.internalLinks || 0;
-
-        const brokenLinksList =
-          result.brokenLinks.links?.filter((link) => link.isBroken) || [];
-        sheet.getCell(row, 7).value = brokenLinksList
+      const rowData = [
+        result.url,
+        brokenLinks.totalLinks || 0,
+        brokenLinks.brokenLinks || 0,
+        brokenLinks.workingLinks || 0,
+        brokenLinks.externalLinks || 0,
+        brokenLinks.internalLinks || 0,
+        brokenLinks.links
+          ?.filter((link) => link.isBroken)
           .map((link) => `${link.url} (${link.error})`)
-          .join("; ");
+          .join("; ") || "No data",
+      ];
 
-        if (result.brokenLinks.brokenLinks > 0) {
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(row, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFE0E0" },
-            };
-          }
-        }
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
+
+      if (brokenLinks.brokenLinks > 0) {
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.FAILED
+        );
       }
     });
 
@@ -566,7 +617,6 @@ class ExcelReporter {
 
   async createStructuredDataSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Structured Data");
-
     const headers = [
       "URL",
       "Has Structured Data",
@@ -578,52 +628,39 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.structuredData !== undefined) {
-        const row = index + 2;
-        const structured = result.structuredData;
+      const row = index + 2;
+      const structured = result.structuredData || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = structured.hasStructuredData
-          ? "Yes"
-          : "No";
-        sheet.getCell(row, 3).value = structured.jsonLd?.length || 0;
-        sheet.getCell(row, 4).value = structured.microdata?.length || 0;
-        sheet.getCell(row, 5).value = structured.rdfa?.length || 0;
+      const schemaTypes =
+        structured.jsonLd
+          ?.filter((schema) => schema.type && schema.type !== "Unknown")
+          .map((schema) => schema.type) || [];
 
-        const schemaTypes = [];
-        if (structured.jsonLd) {
-          structured.jsonLd.forEach((schema) => {
-            if (schema.type && schema.type !== "Unknown") {
-              schemaTypes.push(schema.type);
-            }
-          });
-        }
-        sheet.getCell(row, 6).value = schemaTypes.join(", ");
+      const rowData = [
+        result.url,
+        structured.hasStructuredData ? "Yes" : "No",
+        structured.jsonLd?.length || 0,
+        structured.microdata?.length || 0,
+        structured.rdfa?.length || 0,
+        schemaTypes.join(", "),
+        structured.issues?.length || 0,
+        structured.score || 0,
+      ];
 
-        sheet.getCell(row, 7).value = structured.issues?.length || 0;
-        sheet.getCell(row, 8).value = structured.score || 0;
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
 
-        if (!structured.hasStructuredData) {
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(row, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFFF00" },
-            };
-          }
-        }
+      if (!structured.hasStructuredData) {
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.WARNING
+        );
       }
     });
 
@@ -632,7 +669,6 @@ class ExcelReporter {
 
   async createPerformanceSheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Performance");
-
     const headers = [
       "URL",
       "FCP (ms)",
@@ -646,41 +682,32 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.performance) {
-        const row = index + 2;
-        const perf = result.performance;
+      const row = index + 2;
+      const perf = result.performance || {};
+      const coreWebVitals = perf.coreWebVitals || {};
+      const loadTimes = perf.loadTimes || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value = Math.round(perf.coreWebVitals?.fcp || 0);
-        sheet.getCell(row, 3).value = Math.round(perf.coreWebVitals?.lcp || 0);
-        sheet.getCell(row, 4).value = parseFloat(
-          (perf.coreWebVitals?.cls || 0).toFixed(3)
-        );
-        sheet.getCell(row, 5).value = Math.round(perf.coreWebVitals?.fid || 0);
-        sheet.getCell(row, 6).value = Math.round(perf.coreWebVitals?.ttfb || 0);
-        sheet.getCell(row, 7).value = Math.round(
-          perf.loadTimes?.domContentLoaded || 0
-        );
-        sheet.getCell(row, 8).value = Math.round(
-          perf.loadTimes?.loadComplete || 0
-        );
-        sheet.getCell(row, 9).value = perf.resources?.totalRequests || 0;
-        sheet.getCell(row, 10).value = perf.score || 0;
+      const rowData = [
+        result.url,
+        Math.round(coreWebVitals.fcp || 0),
+        Math.round(coreWebVitals.lcp || 0),
+        parseFloat((coreWebVitals.cls || 0).toFixed(3)),
+        Math.round(coreWebVitals.fid || 0),
+        Math.round(coreWebVitals.ttfb || 0),
+        Math.round(loadTimes.domContentLoaded || 0),
+        Math.round(loadTimes.loadComplete || 0),
+        perf.resources?.totalRequests || 0,
+        perf.score || 0,
+      ];
 
-        this.applyPerformanceColors(sheet, row, perf);
-      }
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
+
+      this.applyPerformanceColors(sheet, row, perf);
     });
 
     this.autoSizeColumns(sheet);
@@ -688,7 +715,6 @@ class ExcelReporter {
 
   async createAccessibilitySheet(workbook, auditResults) {
     const sheet = workbook.addWorksheet("Accessibility");
-
     const headers = [
       "URL",
       "Images without Alt",
@@ -700,184 +726,357 @@ class ExcelReporter {
       "Score",
     ];
 
-    headers.forEach((header, index) => {
-      const cell = sheet.getCell(1, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
-    });
+    this.createHeaderRow(sheet, headers);
 
     auditResults.forEach((result, index) => {
-      if (result.accessibility) {
-        const row = index + 2;
-        const a11y = result.accessibility;
+      const row = index + 2;
+      const a11y = result.accessibility || {};
 
-        sheet.getCell(row, 1).value = result.url;
-        sheet.getCell(row, 2).value =
-          a11y.images?.filter((img) => !img.hasAlt).length || 0;
-        sheet.getCell(row, 3).value =
-          a11y.links?.filter((link) => link.isEmpty).length || 0;
-        sheet.getCell(row, 4).value = this.countFormIssues(a11y.forms || []);
-        sheet.getCell(row, 5).value =
-          a11y.headings?.filter((h) => h.isEmpty).length || 0;
-        sheet.getCell(row, 6).value = "Manual Check Required";
-        sheet.getCell(row, 7).value = a11y.aria?.length || 0;
-        sheet.getCell(row, 8).value = a11y.score || 0;
+      const rowData = [
+        result.url,
+        a11y.images?.filter((img) => !img.hasAlt).length || 0,
+        a11y.links?.filter((link) => link.isEmpty).length || 0,
+        this.countFormIssues(a11y.forms || []),
+        a11y.headings?.filter((h) => h.isEmpty).length || 0,
+        a11y.score ? "Manual Check Required" : "Not Audited",
+        a11y.aria?.length || 0,
+        a11y.score || 0,
+      ];
 
-        if (a11y.score < 80) {
-          for (let col = 1; col <= headers.length; col++) {
-            sheet.getCell(row, col).fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFFFFF00" },
-            };
-          }
-        }
+      rowData.forEach((value, colIndex) => {
+        sheet.getCell(row, colIndex + 1).value = value;
+      });
+
+      if (a11y.score < 80) {
+        this.applyRowColor(
+          sheet,
+          row,
+          headers.length,
+          ExcelReporter.COLORS.WARNING
+        );
       }
     });
 
     this.autoSizeColumns(sheet);
   }
 
-  getCategoryFromType(type) {
-    const categories = {
-      missing_canonical: "Canonical",
-      invalid_canonical: "Canonical",
-      missing_title: "Meta Tags",
-      missing_description: "Meta Tags",
-      title_too_short: "Meta Tags",
-      title_too_long: "Meta Tags",
-      description_too_short: "Meta Tags",
-      description_too_long: "Meta Tags",
-      missing_h1: "Headings",
-      multiple_h1: "Headings",
-      empty_heading: "Headings",
-      broken_link: "Links",
-      broken_image: "Links",
-      missing_json_ld: "Structured Data",
-      invalid_json_ld: "Structured Data",
-      poor_fcp: "Performance",
-      poor_lcp: "Performance",
-      poor_cls: "Performance",
-    };
-    return categories[type] || "Other";
+  async createVisualRegressionSheet(workbook, auditResults) {
+    const sheet = workbook.addWorksheet("Visual Regression");
+    const headers = [
+      "URL",
+      "Element",
+      "Viewport",
+      "Has Changes",
+      "Diff Percentage",
+      "Severity",
+      "Baseline Dimensions",
+      "Current Dimensions",
+      "Diff Path",
+      "Change Reason",
+    ];
+
+    this.createHeaderRow(sheet, headers);
+
+    let rowIndex = 2;
+    const hasData = auditResults.some(
+      (result) => result.visualRegression?.visualChanges?.length > 0
+    );
+
+    auditResults.forEach((result) => {
+      const changes = result.visualRegression?.visualChanges || [];
+
+      if (changes.length > 0) {
+        changes.forEach((change) => {
+          const severity =
+            change.diffPercentage > ExcelReporter.THRESHOLDS.VISUAL_DIFF.MAJOR
+              ? "MAJOR"
+              : change.diffPercentage >
+                  ExcelReporter.THRESHOLDS.VISUAL_DIFF.MINOR
+                ? "MODERATE"
+                : "MINOR";
+
+          const rowData = [
+            result.url,
+            change.element,
+            change.viewport,
+            change.hasChanges ? "Yes" : "No",
+            change.diffPercentage
+              ? `${change.diffPercentage.toFixed(2)}%`
+              : "0%",
+            severity,
+            change.baselineDimensions
+              ? `${change.baselineDimensions.width}x${change.baselineDimensions.height}`
+              : "N/A",
+            change.currentDimensions
+              ? `${change.currentDimensions.width}x${change.currentDimensions.height}`
+              : "N/A",
+            change.diffPath || "N/A",
+            change.reason || "visual_difference",
+          ];
+
+          rowData.forEach((value, colIndex) => {
+            sheet.getCell(rowIndex, colIndex + 1).value = value;
+          });
+
+          const color =
+            severity === "MAJOR"
+              ? ExcelReporter.COLORS.ERROR
+              : severity === "MODERATE"
+                ? ExcelReporter.COLORS.WARNING
+                : null;
+
+          if (color) {
+            this.applyRowColor(sheet, rowIndex, headers.length, color);
+          }
+
+          rowIndex++;
+        });
+      } else {
+        const rowData = [
+          result.url,
+          "N/A",
+          "N/A",
+          "No",
+          "0%",
+          "NONE",
+          "N/A",
+          "N/A",
+          "N/A",
+          "no_changes",
+        ];
+
+        rowData.forEach((value, colIndex) => {
+          sheet.getCell(rowIndex, colIndex + 1).value = value;
+        });
+
+        this.applyRowColor(
+          sheet,
+          rowIndex,
+          headers.length,
+          ExcelReporter.COLORS.SAFE
+        );
+        rowIndex++;
+      }
+    });
+
+    if (auditResults.length === 0) {
+      sheet.getCell(2, 1).value = "No URLs audited";
+      ["No", "0%", "NONE"].forEach((value, index) => {
+        sheet.getCell(2, 4 + index).value = value;
+      });
+      rowIndex = 3;
+    }
+
+    this.finalizeSheet(sheet, headers.length, rowIndex - 1);
+  }
+
+  async createH1ManipulationSheet(workbook, auditResults) {
+    const sheet = workbook.addWorksheet("H1 Manipulation Detection");
+    const headers = [
+      "URL",
+      "From Heading",
+      "To Heading",
+      "Text Content",
+      "Impact Level",
+      "Has Style Compensation",
+      "Manipulation Type",
+      "SEO Risk",
+    ];
+
+    this.createHeaderRow(sheet, headers);
+
+    let rowIndex = 2;
+    let hasManipulations = false;
+
+    auditResults.forEach((result) => {
+      const hierarchyChanges =
+        result.htmlStructure?.structureComparison?.headingChanges
+          ?.hierarchyChanges || [];
+
+      if (hierarchyChanges.length > 0) {
+        hasManipulations = true;
+        hierarchyChanges.forEach((change) => {
+          const hasCompensation =
+            result.htmlStructure?.stylingComparison?.hasCompensation || false;
+          const manipulationType =
+            change.from === "H1" && change.to === "H3"
+              ? "H1→H3 Change"
+              : "Hierarchy Change";
+          const seoRisk =
+            change.impact === "critical"
+              ? "CRITICAL"
+              : change.impact === "warning"
+                ? "HIGH"
+                : "MEDIUM";
+
+          const rowData = [
+            result.url,
+            change.from,
+            change.to,
+            change.text || "",
+            change.impact,
+            hasCompensation ? "YES" : "NO",
+            manipulationType,
+            seoRisk,
+          ];
+
+          rowData.forEach((value, colIndex) => {
+            sheet.getCell(rowIndex, colIndex + 1).value = value;
+          });
+
+          if (seoRisk === "CRITICAL") {
+            this.applyRowColor(
+              sheet,
+              rowIndex,
+              headers.length,
+              ExcelReporter.COLORS.CRITICAL
+            );
+            for (let col = 1; col <= headers.length; col++) {
+              sheet.getCell(rowIndex, col).font = {
+                color: { argb: "FFFFFFFF" },
+                bold: true,
+              };
+            }
+          } else if (seoRisk === "HIGH") {
+            this.applyRowColor(
+              sheet,
+              rowIndex,
+              headers.length,
+              ExcelReporter.COLORS.WARNING
+            );
+          }
+
+          rowIndex++;
+        });
+      } else {
+        const rowData = [
+          result.url,
+          "NONE",
+          "NONE",
+          "No manipulations detected",
+          "CLEAN",
+          "NO",
+          "NONE",
+          "SAFE",
+        ];
+
+        rowData.forEach((value, colIndex) => {
+          sheet.getCell(rowIndex, colIndex + 1).value = value;
+        });
+
+        this.applyRowColor(
+          sheet,
+          rowIndex,
+          headers.length,
+          ExcelReporter.COLORS.SAFE
+        );
+        for (let col = 1; col <= headers.length; col++) {
+          sheet.getCell(rowIndex, col).font = { color: { argb: "FF006400" } };
+        }
+
+        rowIndex++;
+      }
+    });
+
+    if (auditResults.length === 0) {
+      const defaultData = [
+        "No URLs audited",
+        "",
+        "",
+        "",
+        "NONE",
+        "NO",
+        "NONE",
+        "SAFE",
+      ];
+      defaultData.forEach((value, index) => {
+        sheet.getCell(2, index + 1).value = value;
+      });
+      rowIndex = 3;
+    }
+
+    this.finalizeSheet(sheet, headers.length, rowIndex - 1);
   }
 
   applyPerformanceColors(sheet, row, perf) {
-    const fcpCell = sheet.getCell(row, 2);
-    const fcp = perf.coreWebVitals?.fcp || 0;
-    if (fcp > 2500) {
-      fcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFF6B6B" },
-      };
-    } else if (fcp > 1800) {
-      fcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFFF00" },
-      };
-    } else {
-      fcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF90EE90" },
-      };
-    }
+    const metrics = [
+      {
+        col: 2,
+        value: perf.coreWebVitals?.fcp || 0,
+        thresholds: ExcelReporter.THRESHOLDS.PERFORMANCE.FCP,
+      },
+      {
+        col: 3,
+        value: perf.coreWebVitals?.lcp || 0,
+        thresholds: ExcelReporter.THRESHOLDS.PERFORMANCE.LCP,
+      },
+      {
+        col: 4,
+        value: perf.coreWebVitals?.cls || 0,
+        thresholds: ExcelReporter.THRESHOLDS.PERFORMANCE.CLS,
+      },
+    ];
 
-    const lcpCell = sheet.getCell(row, 3);
-    const lcp = perf.coreWebVitals?.lcp || 0;
-    if (lcp > 4000) {
-      lcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFF6B6B" },
-      };
-    } else if (lcp > 2500) {
-      lcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFFF00" },
-      };
-    } else {
-      lcpCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF90EE90" },
-      };
-    }
+    metrics.forEach(({ col, value, thresholds }) => {
+      const cell = sheet.getCell(row, col);
+      const color =
+        value > thresholds.POOR
+          ? ExcelReporter.COLORS.ERROR
+          : value > thresholds.GOOD
+            ? ExcelReporter.COLORS.WARNING
+            : ExcelReporter.COLORS.EXCELLENT;
 
-    const clsCell = sheet.getCell(row, 4);
-    const cls = perf.coreWebVitals?.cls || 0;
-    if (cls > 0.25) {
-      clsCell.fill = {
+      cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FFFF6B6B" },
+        fgColor: { argb: color },
       };
-    } else if (cls > 0.1) {
-      clsCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFFF00" },
-      };
-    } else {
-      clsCell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF90EE90" },
-      };
-    }
-  }
-
-  countFormIssues(forms) {
-    let issues = 0;
-    forms.forEach((form) => {
-      issues +=
-        form.inputs?.filter((input) => !input.hasLabel && !input.ariaLabel)
-          .length || 0;
     });
-    return issues;
   }
+
+  countFormIssues = (forms) =>
+    forms.reduce(
+      (count, form) =>
+        count +
+        (form.inputs?.filter((input) => !input.hasLabel && !input.ariaLabel)
+          .length || 0),
+      0
+    );
 
   autoSizeColumns(sheet) {
     sheet.columns.forEach((column) => {
       let maxLength = 0;
       column.eachCell({ includeEmpty: true }, (cell) => {
-        const columnLength = cell.value ? cell.value.toString().length : 10;
-        if (columnLength > maxLength) {
-          maxLength = columnLength;
-        }
+        const length = cell.value?.toString().length || 10;
+        maxLength = Math.max(maxLength, length);
       });
       column.width = Math.min(maxLength + 2, 50);
     });
   }
 
-  addAutoFilter(sheet, columnCount, rowCount) {
+  finalizeSheet(sheet, columnCount, rowCount) {
+    this.autoSizeColumns(sheet);
+    this.addAutoFilter(sheet, columnCount, rowCount);
+  }
+
+  addAutoFilter = (sheet, columnCount, rowCount) => {
     sheet.autoFilter = {
       from: { row: 1, column: 1 },
       to: { row: rowCount, column: columnCount },
     };
-  }
+  };
 
-  formatDuration(ms) {
+  formatDuration = (ms) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
 
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  }
+    return hours > 0
+      ? `${hours}h ${minutes % 60}m ${seconds % 60}s`
+      : minutes > 0
+        ? `${minutes}m ${seconds % 60}s`
+        : `${seconds}s`;
+  };
 }
 
-module.exports = ExcelReporter;
+export default ExcelReporter;

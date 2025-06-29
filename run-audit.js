@@ -1,44 +1,17 @@
-console.log(" Starting SEO Auditor...");
-
-require("dotenv").config();
+import dotenv from "dotenv";
+dotenv.config();
 console.log(" Environment loaded");
 
-const yargs = require("yargs/yargs");
-const { hideBin } = require("yargs/helpers");
-const colors = require("colors");
+import yargs from "yargs/yargs";
+import { hideBin } from "yargs/helpers";
+import colors from "colors";
+import LandingPageAuditor from "./src/core/LandingPageAuditor.js";
+import Logger from "./src/utils/Logger.js";
+import appConfig from "./config/index.js";
 
 console.log(" Basic modules loaded");
 
-try {
-  const LandingPageAuditor = require("./src/core/LandingPageAuditor");
-  console.log(" LandingPageAuditor loaded");
-} catch (error) {
-  console.error(" Failed to load LandingPageAuditor:", error.message);
-  process.exit(1);
-}
-
-try {
-  const Logger = require("./src/utils/Logger");
-  console.log("Logger loaded");
-} catch (error) {
-  console.error(" Failed to load Logger:", error.message);
-  process.exit(1);
-}
-
-try {
-  const appConfig = require("./config");
-  console.log("Config loaded");
-  console.log(" Config keys:", Object.keys(appConfig));
-} catch (error) {
-  console.error(" Failed to load config:", error.message);
-  process.exit(1);
-}
-
-const LandingPageAuditor = require("./src/core/LandingPageAuditor");
-const Logger = require("./src/utils/Logger");
-const appConfig = require("./config");
-
-console.log("🔧 Parsing command line arguments...");
+console.log(" Parsing command line arguments...");
 
 const argv = yargs(hideBin(process.argv))
   .usage("Usage: $0 <url> [options]")
@@ -175,7 +148,7 @@ class AuditRunner {
   }
 
   parseOptions(argv) {
-    console.log("🔧 Parsing options...");
+    console.log(" Parsing options...");
     let url = argv._[0];
 
     if (!url) {
@@ -202,6 +175,12 @@ class AuditRunner {
       includeAccessibility:
         argv.include === "accessibility" || argv.include === "all",
       includeSecurity: argv.include === "all",
+      includeVisualRegression:
+        process.env.VISUAL_REGRESSION_ENABLED === "true" ||
+        argv.include === "all",
+      includeStructureComparison:
+        process.env.STRUCTURE_COMPARISON_ENABLED === "true" ||
+        argv.include === "all",
       email: argv.email,
       notifications: argv.email,
       includeHTML: argv.output.includes("html") || argv.output.includes("all"),
@@ -224,22 +203,29 @@ class AuditRunner {
         excludePatterns: argv.exclude,
         ...envConfig.crawler,
       },
+
       audit: {
         concurrent: argv.concurrent,
         timeout: argv.timeout,
         includePerformance: auditOptions.includePerformance,
         includeAccessibility: auditOptions.includeAccessibility,
+        includeVisualRegression: auditOptions.includeVisualRegression,
+        includeStructureComparison: auditOptions.includeStructureComparison,
         ...envConfig.audit,
       },
+
       logging: {
         level: argv.verbose ? "debug" : "info",
         ...(appConfig.logging || {}),
       },
+
       email: appConfig.email || { enabled: false },
+
       reports: appConfig.reports || {
         excel: { outputDir: "./reports/excel" },
         html: { outputDir: "./reports/html" },
       },
+
       ...envConfig.config,
     };
 
@@ -281,7 +267,7 @@ class AuditRunner {
 `)
     );
 
-    console.log(colors.white(" Audit Configuration:"));
+    console.log(colors.white("✓ Audit Configuration:"));
     console.log(colors.gray(`   Target URL: ${options.url}`));
     console.log(colors.gray(`   Max Depth: ${options.auditOptions.maxDepth}`));
     console.log(colors.gray(`   Max URLs: ${options.auditOptions.maxUrls}`));
@@ -299,6 +285,20 @@ class AuditRunner {
       colors.gray(
         `   Accessibility: ${
           options.auditOptions.includeAccessibility ? "Yes" : "No"
+        }`
+      )
+    );
+    console.log(
+      colors.gray(
+        `   Visual Regression: ${
+          options.auditOptions.includeVisualRegression ? "Yes" : "No"
+        }`
+      )
+    );
+    console.log(
+      colors.gray(
+        `   Structure Comparison: ${
+          options.auditOptions.includeStructureComparison ? "Yes" : "No"
         }`
       )
     );
@@ -338,16 +338,16 @@ class AuditRunner {
         colors.red(`   Critical Issues: ${results.summary.criticalIssues}`)
       );
     } else {
-      console.log(colors.green(`    No Critical Issues Found`));
+      console.log(colors.green(`   ✓ No Critical Issues Found`));
     }
 
     console.log("");
-    console.log(colors.white(" Generated Reports:"));
+    console.log(colors.white("✓ Generated Reports:"));
     if (results.reports.excel) {
-      console.log(colors.gray(`    Excel: ${results.reports.excel.filePath}`));
+      console.log(colors.gray(`   Excel: ${results.reports.excel.filePath}`));
     }
     if (results.reports.html) {
-      console.log(colors.gray(`    HTML: ${results.reports.html.filePath}`));
+      console.log(colors.gray(`   HTML: ${results.reports.html.filePath}`));
     }
 
     console.log("");
@@ -387,12 +387,8 @@ class AuditRunner {
 
 console.log(" Starting audit runner...");
 
-if (require.main === module) {
-  const runner = new AuditRunner();
-  runner.run().catch((error) => {
-    console.error(" Fatal error:", error);
-    process.exit(1);
-  });
-}
-
-module.exports = AuditRunner;
+const runner = new AuditRunner();
+runner.run().catch((error) => {
+  console.error(" Fatal error:", error);
+  process.exit(1);
+});

@@ -1,5 +1,5 @@
-const BaseAuditor = require("./BaseAuditor");
-const axios = require("axios");
+import BaseAuditor from "./BaseAuditor.js";
+import axios from "axios";
 
 class RedirectAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -8,7 +8,7 @@ class RedirectAuditor extends BaseAuditor {
     this.timeout = config.timeout || 30000;
   }
 
-  async audit(page, url) {
+  async audit(url) {
     try {
       const redirectChain = await this.analyzeRedirectChain(url);
       const issues = [];
@@ -135,7 +135,7 @@ class RedirectAuditor extends BaseAuditor {
     return redirectTypes[statusCode] || "unknown";
   }
 
-  auditRedirectChain(redirectChain, issues, warnings, recommendations) {
+  auditRedirectChain(redirectChain, issues, warnings) {
     const redirectCount = redirectChain.length - 1;
 
     if (redirectCount > 3) {
@@ -143,7 +143,10 @@ class RedirectAuditor extends BaseAuditor {
         this.createWarning(
           "long_redirect_chain",
           `Redirect chain is too long (${redirectCount} redirects). This can negatively impact SEO and user experience`,
-          { redirectCount, chain: redirectChain.map((r) => r.url) }
+          {
+            redirectCount,
+            chain: redirectChain.map((r) => r.url),
+          }
         )
       );
     }
@@ -153,7 +156,10 @@ class RedirectAuditor extends BaseAuditor {
         this.createError(
           "excessive_redirects",
           `Excessive redirect chain (${redirectCount} redirects). This will significantly impact performance`,
-          { redirectCount, chain: redirectChain.map((r) => r.url) }
+          {
+            redirectCount,
+            chain: redirectChain.map((r) => r.url),
+          }
         )
       );
     }
@@ -164,14 +170,17 @@ class RedirectAuditor extends BaseAuditor {
           this.createError(
             "redirect_error",
             `Redirect step ${index + 1} failed: ${redirect.error}`,
-            { url: redirect.url, error: redirect.error }
+            {
+              url: redirect.url,
+              error: redirect.error,
+            }
           )
         );
       }
     });
   }
 
-  auditRedirectTypes(redirectChain, issues, warnings, recommendations) {
+  auditRedirectTypes(redirectChain, warnings, recommendations) {
     redirectChain.forEach((redirect, index) => {
       if (redirect.statusCode === 302 && index < redirectChain.length - 1) {
         recommendations.push(
@@ -180,7 +189,10 @@ class RedirectAuditor extends BaseAuditor {
             `Step ${
               index + 1
             } uses 302 (temporary) redirect. Consider using 301 (permanent) for SEO benefits if the redirect is permanent`,
-            { url: redirect.url, statusCode: redirect.statusCode }
+            {
+              url: redirect.url,
+              statusCode: redirect.statusCode,
+            }
           )
         );
       }
@@ -194,14 +206,17 @@ class RedirectAuditor extends BaseAuditor {
           this.createWarning(
             "unknown_redirect_type",
             `Unknown redirect type for status code ${redirect.statusCode}`,
-            { url: redirect.url, statusCode: redirect.statusCode }
+            {
+              url: redirect.url,
+              statusCode: redirect.statusCode,
+            }
           )
         );
       }
     });
   }
 
-  auditRedirectLoops(redirectChain, issues, warnings, recommendations) {
+  auditRedirectLoops(redirectChain, issues) {
     const loopDetected = redirectChain.some((redirect) => redirect.isLoop);
 
     if (loopDetected) {
@@ -209,7 +224,9 @@ class RedirectAuditor extends BaseAuditor {
         this.createError(
           "redirect_loop",
           "Redirect loop detected in the chain",
-          { chain: redirectChain.map((r) => r.url) }
+          {
+            chain: redirectChain.map((r) => r.url),
+          }
         )
       );
     }
@@ -223,7 +240,9 @@ class RedirectAuditor extends BaseAuditor {
         this.createError(
           "max_redirects_exceeded",
           `Maximum redirect limit (${this.maxRedirects}) exceeded`,
-          { maxRedirects: this.maxRedirects }
+          {
+            maxRedirects: this.maxRedirects,
+          }
         )
       );
     }
@@ -238,4 +257,4 @@ class RedirectAuditor extends BaseAuditor {
   }
 }
 
-module.exports = RedirectAuditor;
+export default RedirectAuditor;

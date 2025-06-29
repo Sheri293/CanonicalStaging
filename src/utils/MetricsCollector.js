@@ -1,4 +1,4 @@
-const Logger = require("./Logger");
+import Logger from "./Logger.js";
 
 class MetricsCollector {
   constructor() {
@@ -18,6 +18,7 @@ class MetricsCollector {
 
   recordPageLoad(url, loadTime, success = true) {
     this.metrics.urlsProcessed++;
+
     if (success) {
       this.metrics.urlsSuccessful++;
       if (loadTime) {
@@ -45,6 +46,7 @@ class MetricsCollector {
 
   getMetrics() {
     this.metrics.endTime = Date.now();
+
     return {
       ...this.metrics,
       duration: this.metrics.endTime - this.metrics.startTime,
@@ -72,4 +74,4 @@ class MetricsCollector {
   }
 }
 
-module.exports = MetricsCollector;
+export default MetricsCollector;

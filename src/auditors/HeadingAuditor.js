@@ -1,4 +1,4 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class HeadingAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -98,7 +98,7 @@ class HeadingAuditor extends BaseAuditor {
     }
   }
 
-  auditH1Tags(headingData, issues, warnings, recommendations) {
+  auditH1Tags(headingData, issues, warnings) {
     if (headingData.h1Count === 0) {
       issues.push(
         this.createError("missing_h1", "Page is missing H1 tag", {
@@ -110,7 +110,9 @@ class HeadingAuditor extends BaseAuditor {
         this.createWarning(
           "multiple_h1",
           `Page has multiple H1 tags (${headingData.h1Count}). Consider using only one H1 per page`,
-          { h1Count: headingData.h1Count }
+          {
+            h1Count: headingData.h1Count,
+          }
         )
       );
     }
@@ -125,7 +127,7 @@ class HeadingAuditor extends BaseAuditor {
     });
   }
 
-  auditHeadingHierarchy(headingData, issues, warnings, recommendations) {
+  auditHeadingHierarchy(headingData, warnings) {
     const headings = headingData.headings;
     let previousLevel = 0;
 
@@ -137,7 +139,10 @@ class HeadingAuditor extends BaseAuditor {
           this.createWarning(
             "first_heading_not_h1",
             `First heading should be H1, found H${currentLevel}`,
-            { level: currentLevel, text: headings[i].text }
+            {
+              level: currentLevel,
+              text: headings[i].text,
+            }
           )
         );
       }
@@ -161,7 +166,7 @@ class HeadingAuditor extends BaseAuditor {
     }
   }
 
-  auditEmptyHeadings(headingData, issues, warnings, recommendations) {
+  auditEmptyHeadings(headingData, issues) {
     const emptyHeadings = headingData.headings.filter((h) => h.isEmpty);
 
     emptyHeadings.forEach((heading) => {
@@ -174,7 +179,7 @@ class HeadingAuditor extends BaseAuditor {
     });
   }
 
-  auditHeadingStructure(headingData, issues, warnings, recommendations) {
+  auditHeadingStructure(headingData, warnings, recommendations) {
     if (headingData.totalHeadings === 0) {
       warnings.push(
         this.createWarning("no_headings", "Page has no heading tags", {
@@ -245,4 +250,4 @@ class HeadingAuditor extends BaseAuditor {
   }
 }
 
-module.exports = HeadingAuditor;
+export default HeadingAuditor;

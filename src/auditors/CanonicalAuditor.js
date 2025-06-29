@@ -1,4 +1,4 @@
-const BaseAuditor = require("./BaseAuditor");
+import BaseAuditor from "./BaseAuditor.js";
 
 class CanonicalAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -42,7 +42,10 @@ class CanonicalAuditor extends BaseAuditor {
               this.createWarning(
                 "external_canonical",
                 "Canonical URL points to external domain",
-                { canonical: canonicalData.canonical, current: url }
+                {
+                  canonical: canonicalData.canonical,
+                  current: url,
+                }
               )
             );
           }
@@ -52,7 +55,10 @@ class CanonicalAuditor extends BaseAuditor {
               this.createWarning(
                 "protocol_mismatch",
                 "Canonical URL protocol differs from current page",
-                { canonical: canonicalData.canonical, current: url }
+                {
+                  canonical: canonicalData.canonical,
+                  current: url,
+                }
               )
             );
           }
@@ -61,7 +67,9 @@ class CanonicalAuditor extends BaseAuditor {
             this.createError(
               "invalid_canonical",
               "Canonical URL is malformed",
-              { canonical: canonicalData.canonical }
+              {
+                canonical: canonicalData.canonical,
+              }
             )
           );
         }
@@ -75,7 +83,9 @@ class CanonicalAuditor extends BaseAuditor {
           this.createWarning(
             "noindex_with_canonical",
             "Page has noindex directive but also has canonical URL",
-            { metaRobots: canonicalData.metaRobots }
+            {
+              metaRobots: canonicalData.metaRobots,
+            }
           )
         );
       }
@@ -103,4 +113,4 @@ class CanonicalAuditor extends BaseAuditor {
   }
 }
 
-module.exports = CanonicalAuditor;
+export default CanonicalAuditor;

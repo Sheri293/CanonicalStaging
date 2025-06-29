@@ -1,5 +1,5 @@
-const BaseAuditor = require("./BaseAuditor");
-const axios = require("axios");
+import BaseAuditor from "./BaseAuditor.js";
+import axios from "axios";
 
 class BrokenLinkAuditor extends BaseAuditor {
   constructor(config = {}) {
@@ -297,7 +297,7 @@ class BrokenLinkAuditor extends BaseAuditor {
     }
   }
 
-  auditLinkTypes(linkCheckResults, issues, warnings, recommendations) {
+  auditLinkTypes(linkCheckResults,  warnings) {
     const externalLinks = linkCheckResults.filter((link) => link.isExternal);
     const slowLinks = linkCheckResults.filter(
       (link) => link.responseTime > 5000
@@ -308,7 +308,9 @@ class BrokenLinkAuditor extends BaseAuditor {
         this.createWarning(
           "many_external_links",
           `Page has many external links (${externalLinks.length}). Consider reviewing if all are necessary`,
-          { externalLinkCount: externalLinks.length }
+          {
+            externalLinkCount: externalLinks.length,
+          }
         )
       );
     }
@@ -318,7 +320,10 @@ class BrokenLinkAuditor extends BaseAuditor {
         this.createWarning(
           "slow_loading_link",
           `Link loads slowly (${link.responseTime}ms): ${link.url}`,
-          { url: link.url, responseTime: link.responseTime }
+          {
+            url: link.url,
+            responseTime: link.responseTime,
+          }
         )
       );
     });
@@ -332,7 +337,9 @@ class BrokenLinkAuditor extends BaseAuditor {
         this.createWarning(
           "link_without_text",
           "Link found without descriptive text",
-          { url: link.url }
+          {
+            url: link.url,
+          }
         )
       );
     });
@@ -347,7 +354,9 @@ class BrokenLinkAuditor extends BaseAuditor {
         this.createWarning(
           "image_without_alt",
           "Image found without alt text",
-          { url: link.url }
+          {
+            url: link.url,
+          }
         )
       );
     });
@@ -363,4 +372,4 @@ class BrokenLinkAuditor extends BaseAuditor {
   }
 }
 
-module.exports = BrokenLinkAuditor;
+export default BrokenLinkAuditor;

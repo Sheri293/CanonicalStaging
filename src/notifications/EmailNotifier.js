@@ -1,7 +1,7 @@
-const nodemailer = require("nodemailer");
-const fs = require("fs-extra");
-const path = require("path");
-const Logger = require("../utils/Logger");
+import nodemailer from "nodemailer";
+import fs from "fs-extra";
+import path from "path";
+import Logger from "../utils/Logger.js";
 
 class EmailNotifier {
   constructor(config = {}) {
@@ -41,7 +41,7 @@ class EmailNotifier {
     try {
       this.logger.info("Initializing email transporter with enhanced settings");
 
-      this.transporter = nodemailer.createTransport({
+      this.transporter = nodemailer.createTransporter({
         host: this.config.smtp.host,
         port: this.config.smtp.port,
         secure: this.config.smtp.secure,
@@ -156,8 +156,10 @@ class EmailNotifier {
         : summary.successRate >= 70
           ? "WARNING"
           : "CRITICAL";
+
     const criticalFlag =
       summary.criticalIssues > 1000 ? " - URGENT ACTION NEEDED" : "";
+
     return `SEO Audit ${status} - ${summary.landingUrl} (${summary.successRate}% success)${criticalFlag}`;
   }
 
@@ -174,13 +176,25 @@ class EmailNotifier {
         : summary.successRate >= 70
           ? "#ffc107"
           : "#dc3545";
+
     const statusIcon =
-      summary.successRate >= 90 ? "" : summary.successRate >= 70 ? "" : "";
+      summary.successRate >= 90
+        ? "✅"
+        : summary.successRate >= 70
+          ? "⚠️"
+          : "🚨";
+
+    const hasVisualChanges = summary.visualChanges && summary.visualChanges > 0;
+    const hasH1Manipulation =
+      summary.h1Manipulations && summary.h1Manipulations > 0;
+
     const urgencyBanner =
-      summary.criticalIssues > 1000
+      summary.criticalIssues > 1000 || hasH1Manipulation
         ? `
     <div style="background: #dc3545; color: white; padding: 15px; text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px;">
-      URGENT: ${summary.criticalIssues} Critical Issues Found - Immediate Action Required!
+      ${hasH1Manipulation ? "🚨 SEO MANIPULATION DETECTED!" : "URGENT:"} ${
+        summary.criticalIssues
+      } Critical Issues Found - Immediate Action Required!
     </div>`
         : "";
 
@@ -190,7 +204,9 @@ class EmailNotifier {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SEO Audit Report - CRITICAL ISSUES DETECTED</title>
+    <title>SEO Audit Report - ${
+      hasH1Manipulation ? "MANIPULATION DETECTED" : "CRITICAL ISSUES DETECTED"
+    }</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background: #f5f5f5; }
         .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -217,6 +233,11 @@ class EmailNotifier {
         .button { display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }
         .performance-alert { background: #ffebee; border: 2px solid #f44336; padding: 20px; border-radius: 8px; margin: 20px 0; }
         .performance-alert h4 { color: #d32f2f; margin: 0 0 10px 0; }
+        .visual-alert { background: #e3f2fd; border: 2px solid #2196f3; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .visual-alert h4 { color: #1976d2; margin: 0 0 10px 0; }
+        .manipulation-alert { background: #ffebee; border: 3px solid #f44336; padding: 20px; border-radius: 8px; margin: 20px 0; animation: pulse 2s infinite; }
+        .manipulation-alert h4 { color: #d32f2f; margin: 0 0 10px 0; font-size: 18px; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); } }
         @media (max-width: 600px) {
             .metrics { grid-template-columns: repeat(2, 1fr); }
             .container { margin: 0; border-radius: 0; }
@@ -228,8 +249,16 @@ class EmailNotifier {
         ${urgencyBanner}
         
         <div class="header">
-            <h1>${statusIcon} SEO Audit Report - PERFORMANCE CRISIS DETECTED</h1>
-            <p>Critical Issues Require Immediate Attention</p>
+            <h1>${statusIcon} SEO Audit Report${
+              hasH1Manipulation
+                ? " - MANIPULATION DETECTED"
+                : " - PERFORMANCE CRISIS DETECTED"
+            }</h1>
+            <p>${
+              hasH1Manipulation
+                ? "SEO Manipulation Requires Immediate Attention"
+                : "Critical Issues Require Immediate Attention"
+            }</p>
         </div>
         
         <div class="content">
@@ -244,6 +273,33 @@ class EmailNotifier {
                     ${summary.successRate || 0}% Success Rate
                 </span>
             </div>
+
+            ${
+              hasH1Manipulation
+                ? `
+            <div class="manipulation-alert">
+                <h4>🚨 CRITICAL: SEO MANIPULATION DETECTED!</h4>
+                <p><strong>${summary.h1Manipulations} H1→H3 changes detected with styling compensation</strong></p>
+                <p>Someone changed H1 headings to H3 but styled them to look like H1s</p>
+                <p><strong>This is a black-hat SEO technique that will harm your rankings!</strong></p>
+                <p style="color: #d32f2f; font-weight: bold;">Google will penalize your site for deceptive practices</p>
+            </div>
+            `
+                : ""
+            }
+
+            ${
+              hasVisualChanges
+                ? `
+            <div class="visual-alert">
+                <h4>👁️ VISUAL CHANGES DETECTED</h4>
+                <p><strong>${summary.visualChanges} visual changes found across pages</strong></p>
+                <p>Screenshots show differences from baseline images</p>
+                <p>Check the Excel report for detailed visual comparison data</p>
+            </div>
+            `
+                : ""
+            }
 
             <div class="performance-alert">
                 <h4>CRITICAL PERFORMANCE ISSUES DETECTED</h4>
@@ -299,6 +355,30 @@ class EmailNotifier {
                     <div class="metric-value">${summary.auditScore || 0}</div>
                     <div class="metric-label">Overall Score</div>
                 </div>
+                ${
+                  hasVisualChanges
+                    ? `
+                <div class="metric">
+                    <div class="metric-value" style="color: #2196f3;">${
+                      summary.visualChanges || 0
+                    }</div>
+                    <div class="metric-label">Visual Changes</div>
+                </div>
+                `
+                    : ""
+                }
+                ${
+                  hasH1Manipulation
+                    ? `
+                <div class="metric">
+                    <div class="metric-value" style="color: #f44336;">${
+                      summary.h1Manipulations || 0
+                    }</div>
+                    <div class="metric-label">H1 Manipulations</div>
+                </div>
+                `
+                    : ""
+                }
             </div>
 
             <div class="section">
@@ -307,6 +387,14 @@ class EmailNotifier {
                     <div class="issue-item critical">${
                       summary.criticalIssues || 0
                     } critical SEO issues found</div>
+                    ${
+                      hasH1Manipulation
+                        ? `
+                    <div class="issue-item critical">H1→H3 manipulation detected - Black hat SEO technique</div>
+                    <div class="issue-item critical">Deceptive heading styling will trigger Google penalties</div>
+                    `
+                        : ""
+                    }
                     <div class="issue-item critical">Pages loading in ${
                       summary.avgLoadTime
                         ? Math.round(summary.avgLoadTime / 1000)
@@ -315,17 +403,38 @@ class EmailNotifier {
                     <div class="issue-item critical">Massive broken link problem detected</div>
                     <div class="issue-item critical">Mobile performance severely impacted</div>
                     <div class="issue-item critical">Google rankings likely affected</div>
+                    ${
+                      hasVisualChanges
+                        ? `
+                    <div class="issue-item critical">${summary.visualChanges} visual changes detected - content may have shifted</div>
+                    `
+                        : ""
+                    }
                 </div>
             </div>
 
             <div class="section">
                 <h3>Immediate Actions Required</h3>
                 <div class="issue-list">
+                    ${
+                      hasH1Manipulation
+                        ? `
+                    <div class="issue-item">0. <strong>URGENT: Fix H1 manipulation immediately</strong> - Revert H3s back to H1s and remove deceptive styling</div>
+                    `
+                        : ""
+                    }
                     <div class="issue-item">1. <strong>Upgrade hosting/server immediately</strong> - Current server cannot handle traffic</div>
                     <div class="issue-item">2. <strong>Fix all broken links</strong> - Use Screaming Frog to identify and repair</div>
                     <div class="issue-item">3. <strong>Add missing meta tags</strong> - Every page needs title and description</div>
                     <div class="issue-item">4. <strong>Enable CDN and caching</strong> - Cloudflare recommended</div>
                     <div class="issue-item">5. <strong>Optimize images</strong> - Compress and add alt text</div>
+                    ${
+                      hasVisualChanges
+                        ? `
+                    <div class="issue-item">6. <strong>Review visual changes</strong> - Check if layout shifts affect user experience</div>
+                    `
+                        : ""
+                    }
                 </div>
             </div>
 
@@ -350,19 +459,50 @@ class EmailNotifier {
                     <div class="issue-item">Average Load Time: ${
                       summary.avgLoadTime || 0
                     }ms</div>
+                    ${
+                      hasVisualChanges
+                        ? `
+                    <div class="issue-item">Visual Changes: ${
+                      summary.visualChanges || 0
+                    }</div>
+                    `
+                        : ""
+                    }
+                    ${
+                      hasH1Manipulation
+                        ? `
+                    <div class="issue-item">H1 Manipulations: ${
+                      summary.h1Manipulations || 0
+                    }</div>
+                    `
+                        : ""
+                    }
                 </div>
             </div>
 
             <div style="text-align: center; margin: 30px 0; padding: 20px; background: #e3f2fd; border-radius: 8px;">
                 <h4 style="margin: 0 0 10px 0; color: #1976d2;">Detailed Excel Report Attached</h4>
-                <p style="margin: 0;">Review the attached Excel file for complete analysis and specific recommendations.</p>
+                <p style="margin: 0;">Review the attached Excel file for complete analysis${
+                  hasVisualChanges ? ", visual regression data," : ""
+                }${
+                  hasH1Manipulation ? " H1 manipulation details," : ""
+                } and specific recommendations.</p>
+                ${
+                  hasVisualChanges
+                    ? `<p style="margin: 5px 0 0 0; font-weight: bold;">New sheets included: Visual Regression & H1 Manipulation Detection</p>`
+                    : ""
+                }
             </div>
         </div>
 
         <div class="footer">
             <p>Generated by SEO Landing Page Auditor v2.0</p>
             <p>This is an automated report - please take immediate action on critical issues</p>
-            <p style="color: #d32f2f; font-weight: bold;">Delayed action may result in significant business impact</p>
+            <p style="color: #d32f2f; font-weight: bold;">${
+              hasH1Manipulation
+                ? "SEO manipulation detected - this is a serious violation that must be fixed immediately"
+                : "Delayed action may result in significant business impact"
+            }</p>
         </div>
     </div>
 </body>
@@ -376,6 +516,7 @@ class EmailNotifier {
         : summary.successRate >= 70
           ? "[WARNING]"
           : "[CRITICAL]";
+
     const avgLoadTimeSeconds = summary.avgLoadTime
       ? Math.round(summary.avgLoadTime / 1000)
       : "Unknown";
@@ -502,6 +643,7 @@ Delayed action may result in significant business impact
   formatFileSize(bytes) {
     const sizes = ["Bytes", "KB", "MB", "GB"];
     if (bytes === 0) return "0 Bytes";
+
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i];
   }
@@ -521,6 +663,7 @@ Delayed action may result in significant business impact
         stack: error.stack,
         code: error.code,
       });
+
       return {
         success: false,
         error: error.message,
@@ -544,4 +687,4 @@ Delayed action may result in significant business impact
   }
 }
 
-module.exports = EmailNotifier;
+export default EmailNotifier;

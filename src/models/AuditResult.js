@@ -8,7 +8,6 @@ class AuditResult {
     this.crawlDepth = data.crawlDepth || 0;
     this.crawlSource = data.crawlSource || "unknown";
     this.timestamp = data.timestamp || new Date().toISOString();
-
     this.canonical = data.canonical || null;
     this.metaTags = data.metaTags || null;
     this.headings = data.headings || null;
@@ -17,11 +16,9 @@ class AuditResult {
     this.structuredData = data.structuredData || [];
     this.performance = data.performance || null;
     this.accessibility = data.accessibility || null;
-
     this.issues = data.issues || [];
     this.warnings = data.warnings || [];
     this.recommendations = data.recommendations || [];
-
     this.auditScore = this.calculateAuditScore();
   }
 
@@ -49,4 +46,4 @@ class AuditResult {
   }
 }
 
-module.exports = AuditResult;
+export default AuditResult;

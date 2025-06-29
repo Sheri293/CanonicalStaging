@@ -1,20 +1,27 @@
-const Logger = require("../utils/Logger");
-const CrawlerEngine = require("./CrawlerEngine");
-const AuditEngine = require("./AuditEngine");
-const ProgressTracker = require("../utils/ProgressTracker");
-const MetricsCollector = require("../utils/MetricsCollector");
-const ExcelReporter = require("../reporters/ExcelReporter");
-const HTMLReporter = require("../reporters/HTMLReporter");
-const EmailNotifier = require("../notifications/EmailNotifier");
-const AuditSummary = require("../models/AuditSummary");
-const config = require("../../config");
+import Logger from "../utils/Logger.js";
+import CrawlerEngine from "./CrawlerEngine.js";
+import AuditEngine from "./AuditEngine.js";
+import ProgressTracker from "../utils/ProgressTracker.js";
+import MetricsCollector from "../utils/MetricsCollector.js";
+import ExcelReporter from "../reporters/ExcelReporter.js";
+import HTMLReporter from "../reporters/HTMLReporter.js";
+import EmailNotifier from "../notifications/EmailNotifier.js";
+import config from "../../config/index.js";
+import AuditSummary from "../models/AuditSummary.js";
+import colors from "colors";
 
 class LandingPageAuditor {
   constructor(options = {}) {
     this.config = { ...config, ...options };
     this.logger = new Logger("LandingPageAuditor");
     this.crawlerEngine = new CrawlerEngine(this.config.crawler);
-    this.auditEngine = new AuditEngine(this.config.audit);
+    this.auditEngine = new AuditEngine({
+      ...this.config.audit,
+      includeVisualRegression: options.includeVisualRegression || true,
+      includeStructureComparison: options.includeStructureComparison || true,
+      visualRegression: options.visualRegression || {},
+      htmlStructure: options.htmlStructure || {},
+    });
     this.progressTracker = new ProgressTracker();
     this.metricsCollector = new MetricsCollector();
     this.startTime = null;
@@ -96,6 +103,7 @@ class LandingPageAuditor {
         auditId: this.auditId,
         summary,
         reports,
+        auditResults,
         duration,
         metrics: this.metricsCollector.getMetrics(),
       };
@@ -152,6 +160,8 @@ class LandingPageAuditor {
       includePerformance: options.includePerformance || false,
       includeAccessibility: options.includeAccessibility || false,
       includeSecurity: options.includeSecurity || false,
+      includeVisualRegression: options.includeVisualRegression || false,
+      includeStructureComparison: options.includeStructureComparison || false,
       timeout: options.timeout || this.config.audit.timeout,
       concurrent: options.concurrent || this.config.audit.concurrent,
     };
@@ -276,7 +286,6 @@ class LandingPageAuditor {
   }
 
   displayHeader(landingUrl) {
-    const colors = require("colors");
     console.log(
       colors.cyan(`
 ╔════════════════════════════════════════════════════════════════╗
@@ -332,4 +341,4 @@ class LandingPageAuditor {
   }
 }
 
-module.exports = LandingPageAuditor;
+export default LandingPageAuditor;

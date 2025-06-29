@@ -1,5 +1,5 @@
-const winston = require("winston");
-const colors = require("colors");
+import winston from "winston";
+import colors from "colors";
 
 class Logger {
   constructor(component = "App") {
@@ -34,12 +34,12 @@ class Logger {
 
   success(message, meta = {}) {
     this.winston.info(message, { component: this.component, ...meta });
-    console.log(colors.green(`[${this.component}] ✅ ${message}`));
+    console.log(colors.green(`[${this.component}]  ${message}`));
   }
 
   warning(message, meta = {}) {
     this.winston.warn(message, { component: this.component, ...meta });
-    console.log(colors.yellow(`[${this.component}] ⚠️  ${message}`));
+    console.log(colors.yellow(`[${this.component}]   ${message}`));
   }
 
   error(message, error = null, meta = {}) {
@@ -48,7 +48,8 @@ class Logger {
       error: error?.stack,
       ...meta,
     });
-    console.log(colors.red(`[${this.component}] ❌ ${message}`));
+    console.log(colors.red(`[${this.component}]  ${message}`));
+
     if (error && process.env.NODE_ENV === "development") {
       console.log(colors.gray(error.stack));
     }
@@ -56,10 +57,11 @@ class Logger {
 
   debug(message, meta = {}) {
     this.winston.debug(message, { component: this.component, ...meta });
+
     if (process.env.LOG_LEVEL === "debug") {
-      console.log(colors.gray(`[${this.component}] 🔍 ${message}`));
+      console.log(colors.gray(`[${this.component}]  ${message}`));
     }
   }
 }
 
-module.exports = Logger;
+export default Logger;

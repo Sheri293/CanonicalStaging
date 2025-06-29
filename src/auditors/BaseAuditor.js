@@ -1,4 +1,4 @@
-const Logger = require("../utils/Logger");
+import Logger from "../utils/Logger.js";
 
 class BaseAuditor {
   constructor(config = {}) {
@@ -11,7 +11,7 @@ class BaseAuditor {
     this.logger.info(`${this.constructor.name} initialized`);
   }
 
-  async audit(page, url) {
+  async audit() {
     throw new Error("audit method must be implemented by subclass");
   }
 
@@ -55,4 +55,4 @@ class BaseAuditor {
   }
 }
 
-module.exports = BaseAuditor;
+export default BaseAuditor;

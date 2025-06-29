@@ -1,13 +1,20 @@
-require("dotenv").config();
-const EmailNotifier = require("../src/notifications/EmailNotifier");
-const fs = require("fs");
-const path = require("path");
-const ExcelJS = require("exceljs");
+import dotenv from "dotenv";
+dotenv.config();
+
+import EmailNotifier from "../src/notifications/EmailNotifier.js";
+import fs from "fs";
+import path from "path";
+import ExcelJS from "exceljs";
+
+const parseIntWithDefault = (value, defaultValue = 0) =>
+  parseInt(value) || defaultValue;
 
 async function emailLatest() {
   try {
     const reportsDir = "./reports/excel";
-    const files = fs.readdirSync(reportsDir).filter((f) => f.endsWith(".xlsx"));
+    const files = fs
+      .readdirSync(reportsDir)
+      .filter((f) => f.endsWith(".xlsx") && !f.startsWith("~$"));
 
     if (files.length === 0) {
       console.log("No Excel reports found");
@@ -33,7 +40,7 @@ async function emailLatest() {
       enabled: true,
       smtp: {
         host: process.env.SMTP_HOST || "smtp.gmail.com",
-        port: parseInt(process.env.SMTP_PORT) || 587,
+        port: parseIntWithDefault(process.env.SMTP_PORT, 587),
         secure: process.env.SMTP_SECURE === "true",
         auth: {
           user: process.env.EMAIL_USER,
@@ -85,30 +92,45 @@ async function readExcelSummary(filePath, fileInfo) {
         "https://staging-www.electrical.com/",
       endTime: fileInfo.time.toISOString(),
       duration: parseDuration(getCellValue(summarySheet, "B", "Duration")) || 0,
-      totalUrls: parseInt(getCellValue(summarySheet, "B", "Total URLs")) || 0,
-      successfulAudits:
-        parseInt(getCellValue(summarySheet, "B", "Successful")) || 0,
-      failedAudits: parseInt(getCellValue(summarySheet, "B", "Failed")) || 0,
-      successRate:
-        parseInt(getCellValue(summarySheet, "B", "Success Rate")) || 0,
-      auditScore: parseInt(getCellValue(summarySheet, "B", "Audit Score")) || 0,
-      criticalIssues:
-        parseInt(getCellValue(summarySheet, "B", "Critical Issues")) || 0,
-      totalWarnings:
-        parseInt(getCellValue(summarySheet, "B", "Total Warnings")) || 0,
+      totalUrls: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Total URLs")
+      ),
+      successfulAudits: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Successful")
+      ),
+      failedAudits: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Failed")
+      ),
+      successRate: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Success Rate")
+      ),
+      auditScore: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Audit Score")
+      ),
+      criticalIssues: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Critical Issues")
+      ),
+      totalWarnings: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Total Warnings")
+      ),
       avgLoadTime:
         parseLoadTime(getCellValue(summarySheet, "B", "Average Load Time")) ||
         0,
-      canonicalIssues:
-        parseInt(getCellValue(summarySheet, "B", "Canonical Issues")) || 0,
-      metaTagIssues:
-        parseInt(getCellValue(summarySheet, "B", "Meta Tag Issues")) || 0,
-      headingIssues:
-        parseInt(getCellValue(summarySheet, "B", "Heading Issues")) || 0,
-      brokenLinksCount:
-        parseInt(getCellValue(summarySheet, "B", "Broken Links")) || 0,
-      redirectsCount:
-        parseInt(getCellValue(summarySheet, "B", "Redirects")) || 0,
+      canonicalIssues: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Canonical Issues")
+      ),
+      metaTagIssues: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Meta Tag Issues")
+      ),
+      headingIssues: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Heading Issues")
+      ),
+      brokenLinksCount: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Broken Links")
+      ),
+      redirectsCount: parseIntWithDefault(
+        getCellValue(summarySheet, "B", "Redirects")
+      ),
       environment: "staging",
       reportType: "Latest Report Email",
     };
@@ -131,6 +153,7 @@ async function readExcelSummary(filePath, fileInfo) {
 function getCellValue(sheet, column, searchText) {
   try {
     let foundRow = null;
+
     sheet.eachRow((row, rowNumber) => {
       const cellA = row.getCell("A").value;
       if (
@@ -152,9 +175,11 @@ function getCellValue(sheet, column, searchText) {
 
 function parseDuration(durationStr) {
   if (!durationStr) return 0;
+
   const str = durationStr.toString();
   const minutes = str.match(/(\d+)m/);
   const seconds = str.match(/(\d+)s/);
+
   return (
     ((minutes ? parseInt(minutes[1]) : 0) * 60 +
       (seconds ? parseInt(seconds[1]) : 0)) *
@@ -164,6 +189,7 @@ function parseDuration(durationStr) {
 
 function parseLoadTime(loadTimeStr) {
   if (!loadTimeStr) return 0;
+
   const str = loadTimeStr.toString();
   if (str.includes("ms")) {
     return parseInt(str.replace("ms", ""));

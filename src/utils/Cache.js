@@ -19,7 +19,6 @@ class Cache {
 
   get(key) {
     const item = this.cache.get(key);
-
     if (!item) return null;
 
     if (Date.now() - item.timestamp > this.ttl) {
@@ -47,4 +46,4 @@ class Cache {
   }
 }
 
-module.exports = Cache;
+export default Cache;
