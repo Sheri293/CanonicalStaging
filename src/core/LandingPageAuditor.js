@@ -230,19 +230,37 @@ class LandingPageAuditor {
       }
 
       if (options.includeJSON) {
-        const jsonReporter = require("../reporters/JSONReporter");
-        reports.json = await jsonReporter.generate(auditResults, summary);
-        this.logger.info("JSON report generated", {
-          path: reports.json.filePath,
-        });
+        try {
+          const { default: JSONReporter } = await import(
+            "../reporters/JSONReporter.js"
+          );
+          const jsonReporter = new JSONReporter();
+          reports.json = await jsonReporter.generate(auditResults, summary);
+          this.logger.info("JSON report generated", {
+            path: reports.json.filePath,
+          });
+        } catch (error) {
+          this.logger.warning(
+            "JSON reporter not available, skipping JSON report"
+          );
+        }
       }
 
       if (options.includeCSV) {
-        const csvReporter = require("../reporters/CSVReporter");
-        reports.csv = await csvReporter.generate(auditResults, summary);
-        this.logger.info("CSV report generated", {
-          path: reports.csv.filePath,
-        });
+        try {
+          const { default: CSVReporter } = await import(
+            "../reporters/CSVReporter.js"
+          );
+          const csvReporter = new CSVReporter();
+          reports.csv = await csvReporter.generate(auditResults, summary);
+          this.logger.info("CSV report generated", {
+            path: reports.csv.filePath,
+          });
+        } catch (error) {
+          this.logger.warning(
+            "CSV reporter not available, skipping CSV report"
+          );
+        }
       }
 
       return reports;
@@ -268,17 +286,33 @@ class LandingPageAuditor {
       }
 
       if (options.slack && this.config.slack.enabled) {
-        const SlackNotifier = require("../notifications/SlackNotifier");
-        const slackNotifier = new SlackNotifier(this.config.slack);
-        await slackNotifier.send(summary);
-        this.logger.info("Slack notification sent");
+        try {
+          const { default: SlackNotifier } = await import(
+            "../notifications/SlackNotifier.js"
+          );
+          const slackNotifier = new SlackNotifier(this.config.slack);
+          await slackNotifier.send(summary);
+          this.logger.info("Slack notification sent");
+        } catch (error) {
+          this.logger.warning(
+            "Slack notifier not available, skipping Slack notification"
+          );
+        }
       }
 
       if (options.webhook && this.config.webhook.enabled) {
-        const WebhookNotifier = require("../notifications/WebhookNotifier");
-        const webhookNotifier = new WebhookNotifier(this.config.webhook);
-        await webhookNotifier.send(summary, reports);
-        this.logger.info("Webhook notification sent");
+        try {
+          const { default: WebhookNotifier } = await import(
+            "../notifications/WebhookNotifier.js"
+          );
+          const webhookNotifier = new WebhookNotifier(this.config.webhook);
+          await webhookNotifier.send(summary, reports);
+          this.logger.info("Webhook notification sent");
+        } catch (error) {
+          this.logger.warning(
+            "Webhook notifier not available, skipping webhook notification"
+          );
+        }
       }
     } catch (error) {
       this.logger.warning("Notification sending failed", error);
